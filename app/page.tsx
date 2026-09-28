@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { 
   Search, Lock, Mail, ExternalLink, Video, Smartphone, 
-  BarChart3, DollarSign, Film, Bookmark, Share2, AlertCircle 
+  BarChart3, DollarSign, Film, Bookmark, AlertCircle, PlayCircle 
 } from 'lucide-react';
 
 interface Influencer {
@@ -31,16 +31,28 @@ interface Influencer {
   tags: string[];
 }
 
+interface Post {
+  id?: string | number;
+  channel_id: string;
+  title: string;
+  post_url: string;
+  thumbnail_url: string;
+  view_count?: number;
+  published_at?: string;
+}
+
 export default function VlingStyleDashboard() {
   const [influencers, setInfluencers] = useState<Influencer[]>([]);
   const [selectedChannel, setSelectedChannel] = useState<Influencer | null>(null);
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [loadingPosts, setLoadingPosts] = useState(false);
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'channel' | 'video' | 'audience' | 'revenue' | 'ad_cost'>('channel');
   const [isProUser, setIsProUser] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // 데이터 불러오기 함수
+  // 채널 목록 불러오기
   const fetchChannels = async (queryText = '') => {
     setLoading(true);
     setErrorMessage(null);
@@ -59,19 +71,50 @@ export default function VlingStyleDashboard() {
       const { data, error } = await query;
 
       if (error) {
-        console.error('Supabase fetch error:', error);
         setErrorMessage(error.message);
       } else if (data) {
         setInfluencers(data as Influencer[]);
-        if (data.length > 0 && !selectedChannel) {
-          setSelectedChannel(data[0] as Influencer);
+        if (data.length > 0) {
+          handleSelectChannel(data[0] as Influencer);
+        } else {
+          setSelectedChannel(null);
+          setPosts([]);
         }
       }
     } catch (err: any) {
-      console.error('Unexpected error:', err);
       setErrorMessage(err.message || '데이터를 불러오는 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // 선택된 채널의 영상 목록(influencer_posts) 가져오기
+  const fetchChannelPosts = async (channelId: string) => {
+    setLoadingPosts(true);
+    try {
+      const { data, error } = await supabase
+        .from('influencer_posts')
+        .select('*')
+        .eq('channel_id', channelId)
+        .limit(12);
+
+      if (!error && data) {
+        setPosts(data as Post[]);
+      } else {
+        setPosts([]);
+      }
+    } catch (e) {
+      console.error('Error fetching posts:', e);
+      setPosts([]);
+    } finally {
+      setLoadingPosts(false);
+    }
+  };
+
+  const handleSelectChannel = (channel: Influencer) => {
+    setSelectedChannel(channel);
+    if (channel.channel_id) {
+      fetchChannelPosts(channel.channel_id);
     }
   };
 
@@ -79,7 +122,6 @@ export default function VlingStyleDashboard() {
     fetchChannels('');
   }, []);
 
-  // 검색 제출 핸들러
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     fetchChannels(search);
@@ -101,7 +143,7 @@ export default function VlingStyleDashboard() {
               <nav className="space-y-1">
                 <button 
                   type="button"
-                  onClick={() => fetchChannels('')}
+                  onClick={() => { setSearch(''); fetchChannels(''); }}
                   className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold bg-red-50 text-red-600 transition"
                 >
                   <Search size={18} /> 유튜버 찾기
@@ -192,7 +234,7 @@ export default function VlingStyleDashboard() {
             </button>
             <button 
               type="button"
-              onClick={() => alert('로그인 모달 준비 중입니다.')}
+              onClick={() => alert('로그인 기능 준비 중입니다.')}
               className="text-xs font-semibold bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 shadow-sm transition"
             >
               로그인 / 가입
@@ -210,13 +252,13 @@ export default function VlingStyleDashboard() {
 
         {/* 인플루언서 목록 및 세부 패널 */}
         <div className="flex-1 flex overflow-hidden">
-          {/* 좌측 리스트 */}
+          {/* 좌측 채널 목록 */}
           <div className="w-1/3 border-r border-slate-200 overflow-y-auto bg-white">
             <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 sticky top-0 z-10">
               <span className="text-xs font-bold text-slate-500">채널 목록 ({influencers.length})</span>
               <button 
                 type="button" 
-                onClick={() => fetchChannels('')} 
+                onClick={() => { setSearch(''); fetchChannels(''); }} 
                 className="text-xs text-red-500 hover:underline cursor-pointer"
               >
                 초기화
@@ -233,7 +275,7 @@ export default function VlingStyleDashboard() {
               influencers.map((channel) => (
                 <div 
                   key={channel.channel_id}
-                  onClick={() => setSelectedChannel(channel)}
+                  onClick={() => handleSelectChannel(channel)}
                   className={`p-4 border-b border-slate-100 flex items-center gap-3 cursor-pointer transition ${
                     selectedChannel?.channel_id === channel.channel_id ? 'bg-red-50/60 border-l-4 border-l-red-500' : 'hover:bg-slate-50'
                   }`}
@@ -317,35 +359,117 @@ export default function VlingStyleDashboard() {
 
                 {/* 탭별 내용 */}
                 {activeTab === 'channel' && (
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                      <p className="text-xs font-medium text-slate-400 mb-1">총 구독자 수</p>
-                      <p className="text-2xl font-extrabold text-slate-900">{(selectedChannel.follower_count || 0).toLocaleString()}명</p>
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                        <p className="text-xs font-medium text-slate-400 mb-1">총 구독자 수</p>
+                        <p className="text-2xl font-extrabold text-slate-900">{(selectedChannel.follower_count || 0).toLocaleString()}명</p>
+                      </div>
+                      <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                        <p className="text-xs font-medium text-slate-400 mb-1">총 영상 수</p>
+                        <p className="text-2xl font-extrabold text-slate-900">{(selectedChannel.total_video_count || 0).toLocaleString()}개</p>
+                      </div>
+                      <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                        <p className="text-xs font-medium text-slate-400 mb-1">참여율(Engagement)</p>
+                        <p className="text-2xl font-extrabold text-emerald-600">{selectedChannel.engagement_rate || 0}%</p>
+                      </div>
                     </div>
-                    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                      <p className="text-xs font-medium text-slate-400 mb-1">총 영상 수</p>
-                      <p className="text-2xl font-extrabold text-slate-900">{(selectedChannel.total_video_count || 0).toLocaleString()}개</p>
-                    </div>
-                    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                      <p className="text-xs font-medium text-slate-400 mb-1">참여율(Engagement)</p>
-                      <p className="text-2xl font-extrabold text-emerald-600">{selectedChannel.engagement_rate || 0}%</p>
+
+                    {/* 최근 수집된 영상 썸네일 그리드 */}
+                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                          <PlayCircle size={18} className="text-red-500" /> 채널 최근 영상
+                        </h3>
+                        <span className="text-xs text-slate-400">{posts.length}개 수집됨</span>
+                      </div>
+
+                      {loadingPosts ? (
+                        <p className="text-xs text-slate-400 py-6 text-center">영상 데이터를 불러오는 중...</p>
+                      ) : posts.length === 0 ? (
+                        <p className="text-xs text-slate-400 py-6 text-center">수집된 영상 데이터가 없습니다.</p>
+                      ) : (
+                        <div className="grid grid-cols-3 gap-4">
+                          {posts.map((post, idx) => (
+                            <a
+                              key={idx}
+                              href={post.post_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="group block rounded-xl overflow-hidden border border-slate-200 hover:shadow-md transition bg-slate-50"
+                            >
+                              <div className="relative aspect-video overflow-hidden bg-slate-200">
+                                <img
+                                  src={post.thumbnail_url}
+                                  alt={post.title}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                                />
+                              </div>
+                              <div className="p-3">
+                                <h4 className="text-xs font-medium text-slate-800 line-clamp-2 leading-relaxed group-hover:text-red-500 transition">
+                                  {post.title}
+                                </h4>
+                                <div className="mt-2 flex items-center justify-between text-[11px] text-slate-400">
+                                  <span>유튜브 바로가기</span>
+                                  <ExternalLink size={12} />
+                                </div>
+                              </div>
+                            </a>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
 
                 {activeTab === 'video' && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                      <div className="flex items-center gap-2 mb-2 text-slate-500 text-xs font-semibold">
-                        <Video size={16} /> 롱폼 평균 조회수
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                        <div className="flex items-center gap-2 mb-2 text-slate-500 text-xs font-semibold">
+                          <Video size={16} /> 롱폼 평균 조회수
+                        </div>
+                        <p className="text-2xl font-black text-slate-900">{(selectedChannel.avg_video_views || 0).toLocaleString()}회</p>
                       </div>
-                      <p className="text-2xl font-black text-slate-900">{(selectedChannel.avg_video_views || 0).toLocaleString()}회</p>
+                      <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                        <div className="flex items-center gap-2 mb-2 text-slate-500 text-xs font-semibold">
+                          <Smartphone size={16} /> 숏폼 평균 조회수
+                        </div>
+                        <p className="text-2xl font-black text-slate-900">{(selectedChannel.avg_shorts_views || 0).toLocaleString()}회</p>
+                      </div>
                     </div>
-                    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                      <div className="flex items-center gap-2 mb-2 text-slate-500 text-xs font-semibold">
-                        <Smartphone size={16} /> 숏폼 평균 조회수
-                      </div>
-                      <p className="text-2xl font-black text-slate-900">{(selectedChannel.avg_shorts_views || 0).toLocaleString()}회</p>
+
+                    {/* 전체 영상 그리드 */}
+                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                      <h3 className="text-sm font-bold text-slate-800 mb-4">분석 대상 영상 목록</h3>
+                      {posts.length === 0 ? (
+                        <p className="text-xs text-slate-400 py-6 text-center">등록된 영상이 없습니다.</p>
+                      ) : (
+                        <div className="grid grid-cols-3 gap-4">
+                          {posts.map((post, idx) => (
+                            <a
+                              key={idx}
+                              href={post.post_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="group block rounded-xl overflow-hidden border border-slate-200 hover:shadow-md transition bg-slate-50"
+                            >
+                              <div className="relative aspect-video overflow-hidden bg-slate-200">
+                                <img
+                                  src={post.thumbnail_url}
+                                  alt={post.title}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                                />
+                              </div>
+                              <div className="p-3">
+                                <h4 className="text-xs font-medium text-slate-800 line-clamp-2 leading-relaxed group-hover:text-red-500 transition">
+                                  {post.title}
+                                </h4>
+                              </div>
+                            </a>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
