@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { 
   Search, Lock, Mail, ExternalLink, Video, Smartphone, 
-  BarChart3, DollarSign, Film, Bookmark, AlertCircle, PlayCircle 
+  BarChart3, DollarSign, Film, Bookmark, AlertCircle, PlayCircle,
+  Filter, ArrowUpDown, Tag, Users
 } from 'lucide-react';
 
 interface Influencer {
@@ -41,6 +42,11 @@ interface Post {
   published_at?: string;
 }
 
+const CATEGORY_TAGS = ['전체', '맛집', '먹방', '여행', 'Vlog', 'IT', '뷰티', '패션', '게임'];
+
+type SubscriberRange = 'all' | 'under10k' | '10k_100k' | '100k_500k' | 'over500k';
+type SortOption = 'follower_desc' | 'views_desc' | 'engagement_desc';
+
 export default function VlingStyleDashboard() {
   const [influencers, setInfluencers] = useState<Influencer[]>([]);
   const [selectedChannel, setSelectedChannel] = useState<Influencer | null>(null);
@@ -52,8 +58,13 @@ export default function VlingStyleDashboard() {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // 채널 목록 불러오기
-  const fetchChannels = async (queryText = '') => {
+  // 다중 필터 & 정렬 상태
+  const [selectedTag, setSelectedTag] = useState<string>('전체');
+  const [subRange, setSubRange] = useState<SubscriberRange>('all');
+  const [sortBy, setSortBy] = useState<SortOption>('follower_desc');
+
+  // Supabase 원본 데이터 가져오기
+  const fetchChannels = async () => {
     setLoading(true);
     setErrorMessage(null);
     try {
@@ -61,24 +72,14 @@ export default function VlingStyleDashboard() {
         throw new Error('Supabase 클라이언트가 설정되지 않았습니다.');
       }
 
-      let query = supabase.from('influencers').select('*');
-      
-      const trimmed = queryText.trim();
-      if (trimmed !== '') {
-        query = query.or(`name.ilike.%${trimmed}%,handle.ilike.%${trimmed}%`);
-      }
-
-      const { data, error } = await query;
+      const { data, error } = await supabase.from('influencers').select('*');
 
       if (error) {
         setErrorMessage(error.message);
       } else if (data) {
         setInfluencers(data as Influencer[]);
-        if (data.length > 0) {
+        if (data.length > 0 && !selectedChannel) {
           handleSelectChannel(data[0] as Influencer);
-        } else {
-          setSelectedChannel(null);
-          setPosts([]);
         }
       }
     } catch (err: any) {
@@ -88,7 +89,7 @@ export default function VlingStyleDashboard() {
     }
   };
 
-  // 선택된 채널의 영상 목록(influencer_posts) 가져오기
+  // 선택된 채널의 영상 목록 가져오기
   const fetchChannelPosts = async (channelId: string) => {
     setLoadingPosts(true);
     try {
@@ -119,12 +120,67 @@ export default function VlingStyleDashboard() {
   };
 
   useEffect(() => {
-    fetchChannels('');
+    fetchChannels();
   }, []);
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    fetchChannels(search);
+  // 다중 필터링 및 정렬 연산
+  const filteredInfluencers = useMemo(() => {
+    return influencers
+      .filter((item) => {
+        // 1. 검색어 필터 (채널명, 핸들)
+        const q = search.trim().toLowerCase();
+        const matchesSearch = !q || 
+          (item.name && item.name.toLowerCase().includes(q)) || 
+          (item.handle && item.handle.toLowerCase().includes(q));
+
+        // 2. 카테고리 태그 필터
+        const matchesTag = selectedTag === '전체' || 
+          (item.tags && item.tags.some(t => t.includes(selectedTag))) ||
+          (item.name && item.name.includes(selectedTag));
+
+        // 3. 구독자 수 범위 필터
+        const count = item.follower_count || 0;
+        let matchesRange = true;
+        if (subRange === 'under10k') matchesRange = count < 10000;
+        else if (subRange === '10k_100k') matchesRange = count >= 10000 && count < 100000;
+        else if (subRange === '100k_500k') matchesRange = count >= 100000 && count < 500000;
+        else if (subRange === 'over500k') matchesRange = count >= 500000;
+
+        return matchesSearch && matchesTag && matchesRange;
+      })
+      .sort((a, b) => {
+        // 4. 정렬 로직
+        if (sortBy === 'follower_desc') {
+          return (b.follower_count || 0) - (a.follower_count || 0);
+        }
+        if (sortBy === 'views_desc') {
+          return (b.avg_views || 0) - (a.avg_views || 0);
+        }
+        if (sortBy === 'engagement_desc') {
+          return (b.engagement_rate || 0) - (a.engagement_rate || 0);
+        }
+        return 0;
+      });
+  }, [influencers, search, selectedTag, subRange, sortBy]);
+
+  // 필터링 결과가 바뀔 때 선택된 채널 유지 또는 재선택
+  useEffect(() => {
+    if (filteredInfluencers.length > 0) {
+      if (!selectedChannel || !filteredInfluencers.some(c => c.channel_id === selectedChannel.channel_id)) {
+        handleSelectChannel(filteredInfluencers[0]);
+      }
+    } else {
+      setSelectedChannel(null);
+      setPosts([]);
+    }
+  }, [filteredInfluencers]);
+
+  // 필터 초기화
+  const resetFilters = () => {
+    setSearch('');
+    setSelectedTag('전체');
+    setSubRange('all');
+    setSortBy('follower_desc');
   };
 
   return (
@@ -143,7 +199,7 @@ export default function VlingStyleDashboard() {
               <nav className="space-y-1">
                 <button 
                   type="button"
-                  onClick={() => { setSearch(''); fetchChannels(''); }}
+                  onClick={resetFilters}
                   className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold bg-red-50 text-red-600 transition"
                 >
                   <Search size={18} /> 유튜버 찾기
@@ -207,22 +263,24 @@ export default function VlingStyleDashboard() {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* 상단 검색바 */}
         <header className="h-16 border-b border-slate-200 bg-white px-8 flex items-center justify-between flex-shrink-0">
-          <form onSubmit={handleSearchSubmit} className="relative w-96 flex items-center">
+          <div className="relative w-96 flex items-center">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
             <input 
               type="text" 
-              placeholder="유튜버 이름 또는 핸들 검색..." 
+              placeholder="유튜버 이름 또는 핸들 실시간 검색..." 
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-20 py-2 border border-slate-200 rounded-full text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition"
+              className="w-full pl-10 pr-10 py-2 border border-slate-200 rounded-full text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition"
             />
-            <button
-              type="submit"
-              className="absolute right-1.5 top-1/2 -translate-y-1/2 px-3 py-1 bg-red-500 text-white rounded-full text-xs font-semibold hover:bg-red-600 transition"
-            >
-              검색
-            </button>
-          </form>
+            {search && (
+              <button 
+                onClick={() => setSearch('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600"
+              >
+                ✕
+              </button>
+            )}
+          </div>
 
           <div className="flex items-center gap-3">
             <button 
@@ -242,6 +300,74 @@ export default function VlingStyleDashboard() {
           </div>
         </header>
 
+        {/* 2-1. 다중 필터 & 정렬 컨트롤 바 */}
+        <div className="bg-white border-b border-slate-200 px-8 py-3 flex flex-wrap items-center justify-between gap-4 flex-shrink-0">
+          {/* 좌측: 카테고리 태그 칩 */}
+          <div className="flex items-center gap-1.5 overflow-x-auto py-1">
+            <span className="text-xs font-bold text-slate-400 flex items-center gap-1 mr-1">
+              <Tag size={13} /> 분류:
+            </span>
+            {CATEGORY_TAGS.map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => setSelectedTag(tag)}
+                className={`px-3 py-1 rounded-full text-xs font-semibold transition ${
+                  selectedTag === tag 
+                    ? 'bg-red-500 text-white shadow-sm' 
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {tag}
+              </button>
+            ))}
+          </div>
+
+          {/* 우측: 구독자 구간 & 정렬 옵션 드롭다운 */}
+          <div className="flex items-center gap-3 text-xs">
+            {/* 구독자 수 필터 */}
+            <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-200">
+              <Users size={14} className="text-slate-400" />
+              <select
+                value={subRange}
+                onChange={(e) => setSubRange(e.target.value as SubscriberRange)}
+                className="bg-transparent font-medium text-slate-700 outline-none cursor-pointer"
+              >
+                <option value="all">구독자 전체</option>
+                <option value="under10k">1만 미만</option>
+                <option value="10k_100k">1만 ~ 10만</option>
+                <option value="100k_500k">10만 ~ 50만</option>
+                <option value="over500k">50만 이상 (메가)</option>
+              </select>
+            </div>
+
+            {/* 정렬 순서 */}
+            <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-200">
+              <ArrowUpDown size={14} className="text-slate-400" />
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as SortOption)}
+                className="bg-transparent font-medium text-slate-700 outline-none cursor-pointer"
+              >
+                <option value="follower_desc">구독자 많은 순</option>
+                <option value="views_desc">평균 조회수 높은 순</option>
+                <option value="engagement_desc">참여율 높은 순</option>
+              </select>
+            </div>
+
+            {/* 필터 초기화 버튼 */}
+            {(selectedTag !== '전체' || subRange !== 'all' || search !== '' || sortBy !== 'follower_desc') && (
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="text-xs text-red-500 hover:underline font-semibold ml-1"
+              >
+                필터 초기화
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* 에러 알림바 */}
         {errorMessage && (
           <div className="bg-red-50 border-b border-red-200 px-8 py-2.5 flex items-center gap-2 text-xs text-red-600">
@@ -255,24 +381,19 @@ export default function VlingStyleDashboard() {
           {/* 좌측 채널 목록 */}
           <div className="w-1/3 border-r border-slate-200 overflow-y-auto bg-white">
             <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 sticky top-0 z-10">
-              <span className="text-xs font-bold text-slate-500">채널 목록 ({influencers.length})</span>
-              <button 
-                type="button" 
-                onClick={() => { setSearch(''); fetchChannels(''); }} 
-                className="text-xs text-red-500 hover:underline cursor-pointer"
-              >
-                초기화
-              </button>
+              <span className="text-xs font-bold text-slate-500">
+                필터링된 채널 ({filteredInfluencers.length})
+              </span>
             </div>
 
             {loading ? (
               <div className="p-8 text-center text-sm text-slate-400">데이터를 불러오는 중...</div>
-            ) : influencers.length === 0 ? (
+            ) : filteredInfluencers.length === 0 ? (
               <div className="p-8 text-center text-sm text-slate-400">
-                일치하는 인플루언서가 없습니다.
+                선택한 조건에 일치하는 인플루언서가 없습니다.
               </div>
             ) : (
-              influencers.map((channel) => (
+              filteredInfluencers.map((channel) => (
                 <div 
                   key={channel.channel_id}
                   onClick={() => handleSelectChannel(channel)}
@@ -439,7 +560,6 @@ export default function VlingStyleDashboard() {
                       </div>
                     </div>
 
-                    {/* 전체 영상 그리드 */}
                     <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                       <h3 className="text-sm font-bold text-slate-800 mb-4">분석 대상 영상 목록</h3>
                       {posts.length === 0 ? (
