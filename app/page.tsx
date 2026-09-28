@@ -87,35 +87,37 @@ export default function VlingStyleDashboard() {
     }
   };
 
-  const fetchChannelPosts = async (channelId: string) => {
-    setLoadingPosts(true);
-    try {
-      const { data, error } = await supabase
-        .from('influencer_posts')
-        .select('*')
-        .eq('channel_id', channelId)
-        .order('id', { ascending: false })
-        .limit(20);
+// fetchChannelPosts 함수 개선
+const fetchChannelPosts = async (channel: Influencer) => {
+  setLoadingPosts(true);
+  try {
+    // 1. 순수 채널 ID 추출 (utube.com/channel/UC... 형태일 경우 뒤의 UC...만 추출)
+    let cleanId = channel.channel_id || '';
+    if (cleanId.includes('/')) {
+      const parts = cleanId.split('/');
+      cleanId = parts[parts.length - 1];
+    }
 
-      if (!error && data) {
-        setPosts(data as Post[]);
-      } else {
-        setPosts([]);
-      }
-    } catch (e) {
-      console.error(e);
+    // 2. channel_id로 영상 조회
+    const { data, error } = await supabase
+      .from('influencer_posts')
+      .select('*')
+      .or(`channel_id.eq.${cleanId},channel_id.eq.${channel.channel_id}`)
+      .order('id', { ascending: false })
+      .limit(30);
+
+    if (!error && data) {
+      setPosts(data as Post[]);
+    } else {
       setPosts([]);
-    } finally {
-      setLoadingPosts(false);
     }
-  };
-
-  const handleSelectChannel = (channel: Influencer) => {
-    setSelectedChannel(channel);
-    if (channel.channel_id) {
-      fetchChannelPosts(channel.channel_id);
-    }
-  };
+  } catch (e) {
+    console.error(e);
+    setPosts([]);
+  } finally {
+    setLoadingPosts(false);
+  }
+};
 
   useEffect(() => {
     fetchChannels();
