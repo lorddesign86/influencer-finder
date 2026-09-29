@@ -66,7 +66,7 @@ const COUNTRY_MAP: Record<string, { name: string; flag: string; color: string }>
   others: { name: '기타 국가', flag: '🌐', color: '#94a3b8' }
 };
 
-// 무료용 배열 셔플 함수
+// 무료용 무작위 셔플 함수
 const shuffleArray = <T,>(array: T[]): T[] => {
   return [...array].sort(() => Math.random() - 0.5);
 };
@@ -78,7 +78,10 @@ export default function VlingStyleDashboard() {
   const [loadingPosts, setLoadingPosts] = useState(false);
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'content_split' | 'channel' | 'video' | 'audience' | 'ad_cost'>('content_split');
-  const [isProUser, setIsProUser] = useState(false);
+  
+  // 개발 편의를 위해 기본값을 true(PRO 모드)로 설정 (테스트 시 토글 가능)
+  const [isProUser, setIsProUser] = useState(true);
+  
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -156,7 +159,7 @@ export default function VlingStyleDashboard() {
     fetchChannels();
   }, []);
 
-  // [수식 엔진] 콘텐츠 성과 분석
+  // [수식 엔진] 쇼츠 vs 롱폼 성과 지표 분석
   const channelAnalytics = useMemo(() => {
     if (!posts || posts.length === 0) {
       return {
@@ -280,7 +283,7 @@ export default function VlingStyleDashboard() {
     return { items, chartSlices };
   }, [selectedChannel]);
 
-  // [채널 목록 필터링 + 100만 이상 대형 채널 20개 랜덤 노출]
+  // [채널 목록 필터링 + 무료 100만+ 채널 20개 노출]
   const filteredInfluencers = useMemo(() => {
     const list = influencers
       .filter((item) => {
@@ -313,7 +316,7 @@ export default function VlingStyleDashboard() {
         return 0;
       });
 
-    // 무료 모드: 구독자 100만 명 이상 채널 중 랜덤 20개 노출
+    // 무료 모드: 100만 이상 대형 채널 20개 무작위 선별
     if (!isProUser) {
       const megaPool = list.filter((item) => (item.follower_count || 0) >= 1000000);
       const displayPool = megaPool.length >= 20 
@@ -347,13 +350,13 @@ export default function VlingStyleDashboard() {
 
   const handleProFilterClick = () => {
     if (!isProUser) {
-      alert('🔒 구독자 구간 및 정렬 필터는 PRO 멤버십 전용 기능입니다.\n좌측 하단 또는 상단에서 PRO 플랜을 활성화해 주세요!');
+      alert('🔒 구독자 구간 및 정렬 필터는 PRO 멤버십 전용 기능입니다.\n좌측 하단이나 상단에서 PRO 플랜을 활성화해 주세요!');
     }
   };
 
   return (
     <div className="flex h-screen bg-[#f8f9fa] text-slate-800 antialiased overflow-hidden font-sans">
-      {/* 1. 좌측 사이드바 */}
+      {/* 1. 사이드바 */}
       <aside className="w-64 border-r border-slate-200 bg-white flex flex-col justify-between flex-shrink-0">
         <div>
           <div className="h-16 flex items-center px-6 border-b border-slate-100 gap-2">
@@ -428,7 +431,7 @@ export default function VlingStyleDashboard() {
 
       {/* 2. 메인 컨텐츠 영역 */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* 상단 검색바 */}
+        {/* 상단 헤더 */}
         <header className="h-16 border-b border-slate-200 bg-white px-8 flex items-center justify-between flex-shrink-0">
           <div className="relative w-96 flex items-center">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
@@ -467,7 +470,7 @@ export default function VlingStyleDashboard() {
           </div>
         </header>
 
-        {/* 상단 카테고리 & PRO 전용 필터 바 */}
+        {/* 상단 카테고리 태그 및 PRO 전용 필터 바 */}
         <div className="bg-white border-b border-slate-200 px-8 py-3 flex flex-wrap items-center justify-between gap-4 flex-shrink-0">
           <div className="flex items-center gap-1.5 overflow-x-auto py-1">
             <span className="text-xs font-bold text-slate-400 flex items-center gap-1 mr-1">
@@ -489,57 +492,82 @@ export default function VlingStyleDashboard() {
             ))}
           </div>
 
-          {/* 구독자 & 정렬 필터 (PRO 전용 잠금) */}
+          {/* 구독자 & 정렬 필터 (무료 모드 시 완전 잠금 오버레이 적용) */}
           <div className="flex items-center gap-3 text-xs">
-            <div 
-              onClick={handleProFilterClick}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition ${
-                isProUser 
-                  ? 'bg-slate-50 border-slate-200' 
-                  : 'bg-slate-100 border-dashed border-slate-300 cursor-pointer hover:border-amber-400'
-              }`}
-            >
-              {isProUser ? <Users size={14} className="text-slate-400" /> : <Lock size={14} className="text-amber-500" />}
-              <select
-                disabled={!isProUser}
-                value={subRange}
-                onChange={(e) => setSubRange(e.target.value as SubscriberRange)}
-                className={`bg-transparent font-medium outline-none ${
-                  isProUser ? 'text-slate-700 cursor-pointer' : 'text-slate-400 cursor-not-allowed pointer-events-none'
+            {/* 1. 구독자 구간 필터 */}
+            <div className="relative">
+              <div
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition ${
+                  isProUser 
+                    ? 'bg-slate-50 border-slate-200' 
+                    : 'bg-slate-100/80 border-dashed border-amber-300'
                 }`}
               >
-                <option value="all">구독자 전체 {!isProUser && '(PRO)'}</option>
-                <option value="under10k">1만 미만</option>
-                <option value="10k_100k">1만 ~ 10만</option>
-                <option value="100k_500k">10만 ~ 50만</option>
-                <option value="over500k">50만 이상 (메가)</option>
-              </select>
+                {isProUser ? <Users size={14} className="text-slate-400" /> : <Lock size={14} className="text-amber-500" />}
+                <select
+                  disabled={!isProUser}
+                  value={subRange}
+                  onChange={(e) => setSubRange(e.target.value as SubscriberRange)}
+                  className={`bg-transparent font-medium outline-none ${
+                    isProUser ? 'text-slate-700 cursor-pointer' : 'text-slate-400 pointer-events-none'
+                  }`}
+                >
+                  <option value="all">구독자 전체 {!isProUser && '(PRO)'}</option>
+                  <option value="under10k">1만 미만</option>
+                  <option value="10k_100k">1만 ~ 10만</option>
+                  <option value="100k_500k">10만 ~ 50만</option>
+                  <option value="over500k">50만 이상 (메가)</option>
+                </select>
+              </div>
+
+              {/* 무료 모드일 때 클릭 가로채는 투명 오버레이 버튼 */}
+              {!isProUser && (
+                <button
+                  type="button"
+                  onClick={handleProFilterClick}
+                  className="absolute inset-0 w-full h-full cursor-pointer z-10 bg-transparent"
+                  title="PRO 전용 필터"
+                />
+              )}
             </div>
 
-            <div 
-              onClick={handleProFilterClick}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition ${
-                isProUser 
-                  ? 'bg-slate-50 border-slate-200' 
-                  : 'bg-slate-100 border-dashed border-slate-300 cursor-pointer hover:border-amber-400'
-              }`}
-            >
-              {isProUser ? <ArrowUpDown size={14} className="text-slate-400" /> : <Lock size={14} className="text-amber-500" />}
-              <select
-                disabled={!isProUser}
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as SortOption)}
-                className={`bg-transparent font-medium outline-none ${
-                  isProUser ? 'text-slate-700 cursor-pointer' : 'text-slate-400 cursor-not-allowed pointer-events-none'
+            {/* 2. 정렬 순서 필터 */}
+            <div className="relative">
+              <div
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition ${
+                  isProUser 
+                    ? 'bg-slate-50 border-slate-200' 
+                    : 'bg-slate-100/80 border-dashed border-amber-300'
                 }`}
               >
-                <option value="follower_desc">구독자 많은 순 {!isProUser && '(PRO)'}</option>
-                <option value="views_desc">평균 조회수 높은 순</option>
-                <option value="engagement_desc">참여율 높은 순</option>
-              </select>
+                {isProUser ? <ArrowUpDown size={14} className="text-slate-400" /> : <Lock size={14} className="text-amber-500" />}
+                <select
+                  disabled={!isProUser}
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as SortOption)}
+                  className={`bg-transparent font-medium outline-none ${
+                    isProUser ? 'text-slate-700 cursor-pointer' : 'text-slate-400 pointer-events-none'
+                  }`}
+                >
+                  <option value="follower_desc">구독자 많은 순 {!isProUser && '(PRO)'}</option>
+                  <option value="views_desc">평균 조회수 높은 순</option>
+                  <option value="engagement_desc">참여율 높은 순</option>
+                </select>
+              </div>
+
+              {/* 무료 모드일 때 클릭 가로채는 투명 오버레이 버튼 */}
+              {!isProUser && (
+                <button
+                  type="button"
+                  onClick={handleProFilterClick}
+                  className="absolute inset-0 w-full h-full cursor-pointer z-10 bg-transparent"
+                  title="PRO 전용 정렬"
+                />
+              )}
             </div>
 
-            {(selectedTag !== '전체' || subRange !== 'all' || search !== '' || sortBy !== 'follower_desc') && (
+            {/* 초기화 버튼 */}
+            {isProUser && (selectedTag !== '전체' || subRange !== 'all' || search !== '' || sortBy !== 'follower_desc') && (
               <button
                 type="button"
                 onClick={resetFilters}
@@ -558,7 +586,7 @@ export default function VlingStyleDashboard() {
           </div>
         )}
 
-        {/* 인플루언서 목록 & 우측 상세 영역 */}
+        {/* 인플루언서 목록 & 우측 분석 대시보드 */}
         <div className="flex-1 flex overflow-hidden">
           {/* 채널 목록 (무료: 100만+ 채널 20개 무작위 / PRO: 1,000개 전체) */}
           <div className="w-1/3 border-r border-slate-200 overflow-y-auto bg-white flex flex-col justify-between">
