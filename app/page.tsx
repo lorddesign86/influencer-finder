@@ -52,7 +52,6 @@ const CATEGORY_TAGS = ['전체', '맛집', '먹방', '여행', 'Vlog', 'IT', '�
 type SubscriberRange = 'all' | 'under10k' | '10k_100k' | '100k_500k' | 'over500k';
 type SortOption = 'follower_desc' | 'views_desc' | 'engagement_desc';
 
-// 국가/언어 코드 매핑 정보 (국기, 한글 국가명, 테마 색상)
 const COUNTRY_MAP: Record<string, { name: string; flag: string; color: string }> = {
   ko: { name: '대한민국', flag: '🇰🇷', color: '#ef4444' },
   'ko-kr': { name: '대한민국', flag: '🇰🇷', color: '#ef4444' },
@@ -65,6 +64,11 @@ const COUNTRY_MAP: Record<string, { name: string; flag: string; color: string }>
   id: { name: '인도네시아', flag: '🇮🇩', color: '#8b5cf6' },
   th: { name: '태국', flag: '🇹🇭', color: '#06b6d4' },
   others: { name: '기타 국가', flag: '🌐', color: '#94a3b8' }
+};
+
+// 무료용 무작위 셔플 함수
+const shuffleArray = <T,>(array: T[]): T[] => {
+  return [...array].sort(() => Math.random() - 0.5);
 };
 
 export default function VlingStyleDashboard() {
@@ -81,23 +85,9 @@ export default function VlingStyleDashboard() {
   const [selectedTag, setSelectedTag] = useState<string>('전체');
   const [subRange, setSubRange] = useState<SubscriberRange>('all');
   const [sortBy, setSortBy] = useState<SortOption>('follower_desc');
-  const [selectedTag, setSelectedTag] = useState<string>('전체');
-  const [subRange, setSubRange] = useState<SubscriberRange>('all');
-  const [sortBy, setSortBy] = useState<SortOption>('follower_desc');
 
-  // 👇 [추가] 영상 목록 필터 상태 (기본값: 'ALL')
+  // 영상 탭 필터 (전체 / 롱폼 / 숏폼)
   const [videoTypeFilter, setVideoTypeFilter] = useState<'ALL' | 'VIDEO' | 'SHORTS'>('ALL');
-
-  // 👇 [추가] 선택된 버튼에 따른 영상 필터링
-  const filteredPosts = useMemo(() => {
-    return posts.filter((post) => {
-      if (videoTypeFilter === 'ALL') return true;
-      const isShorts = post.content_type === 'SHORTS' || (post.post_url && post.post_url.includes('/shorts/'));
-      if (videoTypeFilter === 'SHORTS') return isShorts;
-      if (videoTypeFilter === 'VIDEO') return !isShorts;
-      return true;
-    });
-  }, [posts, videoTypeFilter]);
 
   const fetchChannelPosts = async (channel: Influencer) => {
     if (!channel) return;
@@ -161,7 +151,7 @@ export default function VlingStyleDashboard() {
     fetchChannels();
   }, []);
 
-  // [수식 엔진] 쇼츠 vs 롱폼 분리 지표 연산
+  // [수식 연산 엔진]
   const channelAnalytics = useMemo(() => {
     if (!posts || posts.length === 0) {
       return {
@@ -238,7 +228,7 @@ export default function VlingStyleDashboard() {
     };
   }, [posts, selectedChannel]);
 
-  // [수식 엔진] 시청자 국가 분포 정규화 및 원형 차트용 각도 연산
+  // 시청자 국가 통계
   const audienceStats = useMemo(() => {
     let rawLang = selectedChannel?.audience_languages;
     let parsed: Record<string, number> = {};
@@ -249,14 +239,12 @@ export default function VlingStyleDashboard() {
       parsed = { ko: 94.2, en: 3.8, ja: 2.0 };
     }
 
-    // 만약 단일 언어로 100만 기재되어 있을 때 현실적인 자연 분포 생성
     const keys = Object.keys(parsed);
     if (keys.length === 1 && (parsed[keys[0]] === 100 || parsed[keys[0]] === 1)) {
       const main = keys[0].toLowerCase();
       parsed = { [main]: 92.5, en: 5.2, others: 2.3 };
     }
 
-    // 리스트 정렬 및 백분율 환산
     const total = Object.values(parsed).reduce((acc, v) => acc + Number(v), 0) || 100;
     const items = Object.entries(parsed).map(([key, val]) => {
       const lower = key.toLowerCase();
@@ -271,7 +259,6 @@ export default function VlingStyleDashboard() {
       };
     }).sort((a, b) => b.percent - a.percent);
 
-    // SVG 원형 도넛 차트 stroke-dasharray 계산 (반지름 40 기준 원둘레 251.2)
     const circumference = 2 * Math.PI * 40;
     let accumulatedPercent = 0;
     const chartSlices = items.map((item) => {
@@ -288,8 +275,9 @@ export default function VlingStyleDashboard() {
     return { items, chartSlices };
   }, [selectedChannel]);
 
+  // [채널 목록 필터링 + 무료 10개 랜덤 제한]
   const filteredInfluencers = useMemo(() => {
-    return influencers
+    const list = influencers
       .filter((item) => {
         const q = search.trim().toLowerCase();
         const matchesSearch = !q || 
@@ -300,22 +288,45 @@ export default function VlingStyleDashboard() {
           (item.tags && item.tags.some(t => t.includes(selectedTag))) ||
           (item.name && item.name.includes(selectedTag));
 
+        // 구독자 필터는 PRO 사용자에게만 실제 필터링 적용
         const count = item.follower_count || 0;
         let matchesRange = true;
-        if (subRange === 'under10k') matchesRange = count < 10000;
-        else if (subRange === '10k_100k') matchesRange = count >= 10000 && count < 100000;
-        else if (subRange === '100k_500k') matchesRange = count >= 100000 && count < 500000;
-        else if (subRange === 'over500k') matchesRange = count >= 500000;
+        if (isProUser) {
+          if (subRange === 'under10k') matchesRange = count < 10000;
+          else if (subRange === '10k_100k') matchesRange = count >= 10000 && count < 100000;
+          else if (subRange === '100k_500k') matchesRange = count >= 100000 && count < 500000;
+          else if (subRange === 'over500k') matchesRange = count >= 500000;
+        }
 
         return matchesSearch && matchesTag && matchesRange;
       })
       .sort((a, b) => {
+        if (!isProUser) return 0; // 무료 사용자는 기본 정렬 유지
         if (sortBy === 'follower_desc') return (b.follower_count || 0) - (a.follower_count || 0);
         if (sortBy === 'views_desc') return (b.avg_views || 0) - (a.avg_views || 0);
         if (sortBy === 'engagement_desc') return (b.engagement_rate || 0) - (a.engagement_rate || 0);
         return 0;
       });
-  }, [influencers, search, selectedTag, subRange, sortBy]);
+
+    // 무료 모드: 무작위 10개 추출
+    if (!isProUser) {
+      return shuffleArray(list).slice(0, 10);
+    }
+
+    // PRO 모드: 최대 1,000개 해금
+    return list.slice(0, 1000);
+  }, [influencers, search, selectedTag, subRange, sortBy, isProUser]);
+
+  // 영상 목록 필터 (전체 / 롱폼 / 숏폼)
+  const filteredPosts = useMemo(() => {
+    return posts.filter((post) => {
+      if (videoTypeFilter === 'ALL') return true;
+      const isShorts = post.content_type === 'SHORTS' || (post.post_url && post.post_url.includes('/shorts/'));
+      if (videoTypeFilter === 'SHORTS') return isShorts;
+      if (videoTypeFilter === 'VIDEO') return !isShorts;
+      return true;
+    });
+  }, [posts, videoTypeFilter]);
 
   const resetFilters = () => {
     setSearch('');
@@ -324,13 +335,19 @@ export default function VlingStyleDashboard() {
     setSortBy('follower_desc');
   };
 
+  const handleProFilterClick = () => {
+    if (!isProUser) {
+      alert('🔒 구독자 구간 및 정렬 필터는 PRO 멤버십 전용 기능입니다.\n좌측 하단이나 상단에서 PRO 플랜을 활성화해 주세요!');
+    }
+  };
+
   return (
     <div className="flex h-screen bg-[#f8f9fa] text-slate-800 antialiased overflow-hidden font-sans">
       {/* 1. 사이드바 */}
       <aside className="w-64 border-r border-slate-200 bg-white flex flex-col justify-between flex-shrink-0">
         <div>
           <div className="h-16 flex items-center px-6 border-b border-slate-100 gap-2">
-            <span className="text-2xl font-black tracking-tight text-red-500">Findlist</span>
+            <span className="text-2xl font-black tracking-tight text-red-500">vling</span>
             <span className="text-xs bg-red-100 text-red-600 font-bold px-1.5 py-0.5 rounded">PRO</span>
           </div>
 
@@ -399,7 +416,7 @@ export default function VlingStyleDashboard() {
         </div>
       </aside>
 
-      {/* 2. 메인 컨텐츠 영역 */}
+      {/* 2. 메인 영역 */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* 상단 검색바 */}
         <header className="h-16 border-b border-slate-200 bg-white px-8 flex items-center justify-between flex-shrink-0">
@@ -432,15 +449,15 @@ export default function VlingStyleDashboard() {
             </button>
             <button 
               type="button"
-              onClick={() => alert('로그인 기능 준비 중입니다.')}
-              className="text-xs font-semibold bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 shadow-sm transition cursor-pointer"
+              onClick={() => setIsProUser(true)}
+              className="text-xs font-semibold bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 shadow-sm transition cursor-pointer flex items-center gap-1.5"
             >
-              로그인 / 가입
+              <Lock size={12} /> PRO 업그레이드
             </button>
           </div>
         </header>
 
-        {/* 다중 필터 & 정렬 컨트롤 바 */}
+        {/* 상단 필터 바: 구독자/정렬 필터 PRO 잠금 처리 */}
         <div className="bg-white border-b border-slate-200 px-8 py-3 flex flex-wrap items-center justify-between gap-4 flex-shrink-0">
           <div className="flex items-center gap-1.5 overflow-x-auto py-1">
             <span className="text-xs font-bold text-slate-400 flex items-center gap-1 mr-1">
@@ -462,15 +479,27 @@ export default function VlingStyleDashboard() {
             ))}
           </div>
 
+          {/* 구독자 & 정렬 필터 (PRO 전용 잠금) */}
           <div className="flex items-center gap-3 text-xs">
-            <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-200">
-              <Users size={14} className="text-slate-400" />
+            {/* 구독자 구간 필터 */}
+            <div 
+              onClick={handleProFilterClick}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition ${
+                isProUser 
+                  ? 'bg-slate-50 border-slate-200' 
+                  : 'bg-slate-100 border-dashed border-slate-300 cursor-pointer hover:border-amber-400'
+              }`}
+            >
+              {isProUser ? <Users size={14} className="text-slate-400" /> : <Lock size={14} className="text-amber-500" />}
               <select
+                disabled={!isProUser}
                 value={subRange}
                 onChange={(e) => setSubRange(e.target.value as SubscriberRange)}
-                className="bg-transparent font-medium text-slate-700 outline-none cursor-pointer"
+                className={`bg-transparent font-medium outline-none ${
+                  isProUser ? 'text-slate-700 cursor-pointer' : 'text-slate-400 cursor-not-allowed pointer-events-none'
+                }`}
               >
-                <option value="all">구독자 전체</option>
+                <option value="all">구독자 전체 {!isProUser && '(PRO)'}</option>
                 <option value="under10k">1만 미만</option>
                 <option value="10k_100k">1만 ~ 10만</option>
                 <option value="100k_500k">10만 ~ 50만</option>
@@ -478,14 +507,25 @@ export default function VlingStyleDashboard() {
               </select>
             </div>
 
-            <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-200">
-              <ArrowUpDown size={14} className="text-slate-400" />
+            {/* 정렬 필터 */}
+            <div 
+              onClick={handleProFilterClick}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition ${
+                isProUser 
+                  ? 'bg-slate-50 border-slate-200' 
+                  : 'bg-slate-100 border-dashed border-slate-300 cursor-pointer hover:border-amber-400'
+              }`}
+            >
+              {isProUser ? <ArrowUpDown size={14} className="text-slate-400" /> : <Lock size={14} className="text-amber-500" />}
               <select
+                disabled={!isProUser}
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as SortOption)}
-                className="bg-transparent font-medium text-slate-700 outline-none cursor-pointer"
+                className={`bg-transparent font-medium outline-none ${
+                  isProUser ? 'text-slate-700 cursor-pointer' : 'text-slate-400 cursor-not-allowed pointer-events-none'
+                }`}
               >
-                <option value="follower_desc">구독자 많은 순</option>
+                <option value="follower_desc">구독자 많은 순 {!isProUser && '(PRO)'}</option>
                 <option value="views_desc">평균 조회수 높은 순</option>
                 <option value="engagement_desc">참여율 높은 순</option>
               </select>
@@ -512,44 +552,65 @@ export default function VlingStyleDashboard() {
 
         {/* 인플루언서 목록 & 우측 대시보드 */}
         <div className="flex-1 flex overflow-hidden">
-          {/* 채널 목록 */}
-          <div className="w-1/3 border-r border-slate-200 overflow-y-auto bg-white">
-            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 sticky top-0 z-10">
-              <span className="text-xs font-bold text-slate-500">
-                인플루언서 목록 ({filteredInfluencers.length})
-              </span>
-            </div>
-
-            {loading ? (
-              <div className="p-8 text-center text-sm text-slate-400">데이터를 불러오는 중...</div>
-            ) : filteredInfluencers.length === 0 ? (
-              <div className="p-8 text-center text-sm text-slate-400">
-                일치하는 인플루언서가 없습니다.
+          {/* 채널 목록 (무료: 랜덤 10개 + 하단 PRO 결제 더보기 배너) */}
+          <div className="w-1/3 border-r border-slate-200 overflow-y-auto bg-white flex flex-col justify-between">
+            <div>
+              <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 sticky top-0 z-10">
+                <span className="text-xs font-bold text-slate-500">
+                  인플루언서 목록 ({filteredInfluencers.length}개 {isProUser ? '전체' : '샘플'})
+                </span>
+                {!isProUser && (
+                  <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                    무료 모드 (랜덤 10개)
+                  </span>
+                )}
               </div>
-            ) : (
-              filteredInfluencers.map((channel) => (
-                <div 
-                  key={channel.channel_id}
-                  onClick={() => handleSelectChannel(channel)}
-                  className={`p-4 border-b border-slate-100 flex items-center gap-3 cursor-pointer transition ${
-                    selectedChannel?.channel_id === channel.channel_id ? 'bg-red-50/60 border-l-4 border-l-red-500' : 'hover:bg-slate-50'
-                  }`}
-                >
-                  <img 
-                    src={channel.profile_img_url || 'https://via.placeholder.com/150'} 
-                    alt={channel.name} 
-                    className="w-12 h-12 rounded-full border border-slate-200 object-cover flex-shrink-0"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <h4 className="text-sm font-bold text-slate-900 truncate">{channel.name}</h4>
-                    <p className="text-xs text-slate-400 truncate">{channel.handle}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-[11px] font-semibold text-slate-600">구독자 {(channel.follower_count / 10000).toFixed(1)}만</span>
-                      <span className="text-[11px] text-slate-400">• 평균조회 {(channel.avg_views / 10000).toFixed(1)}만</span>
+
+              {loading ? (
+                <div className="p-8 text-center text-sm text-slate-400">데이터를 불러오는 중...</div>
+              ) : filteredInfluencers.length === 0 ? (
+                <div className="p-8 text-center text-sm text-slate-400">일치하는 인플루언서가 없습니다.</div>
+              ) : (
+                filteredInfluencers.map((channel) => (
+                  <div 
+                    key={channel.channel_id}
+                    onClick={() => handleSelectChannel(channel)}
+                    className={`p-4 border-b border-slate-100 flex items-center gap-3 cursor-pointer transition ${
+                      selectedChannel?.channel_id === channel.channel_id ? 'bg-red-50/60 border-l-4 border-l-red-500' : 'hover:bg-slate-50'
+                    }`}
+                  >
+                    <img 
+                      src={channel.profile_img_url || 'https://via.placeholder.com/150'} 
+                      alt={channel.name} 
+                      className="w-12 h-12 rounded-full border border-slate-200 object-cover flex-shrink-0"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <h4 className="text-sm font-bold text-slate-900 truncate">{channel.name}</h4>
+                      <p className="text-xs text-slate-400 truncate">{channel.handle}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-[11px] font-semibold text-slate-600">구독자 {(channel.follower_count / 10000).toFixed(1)}만</span>
+                        <span className="text-[11px] text-slate-400">• 평균조회 {(channel.avg_views / 10000).toFixed(1)}만</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))
+                ))
+              )}
+            </div>
+
+            {/* 무료 모드일 때 하단 고정 PRO 결제 더보기 배너 */}
+            {!isProUser && (
+              <div className="p-4 bg-gradient-to-t from-slate-50 to-white border-t border-slate-200 text-center sticky bottom-0">
+                <p className="text-xs text-slate-500 mb-2 font-medium">
+                  현재 무료 체험으로 <strong>랜덤 10개</strong>만 표시 중입니다.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setIsProUser(true)}
+                  className="w-full py-2.5 px-4 bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-xl text-xs font-bold shadow-md hover:brightness-105 transition flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Lock size={13} /> PRO 결제하고 전체 인플루언서 보기 →
+                </button>
+              </div>
             )}
           </div>
 
@@ -739,10 +800,10 @@ export default function VlingStyleDashboard() {
                   </div>
                 )}
 
-{/* [3] 최근 영상 목록 그리드 */}
+                {/* [3] 최근 영상 목록: [전체/롱폼/숏폼] 필터 + PRO 전용 조회수 잠금 */}
                 {activeTab === 'video' && (
                   <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                    {/* 상단 헤더: 제목 + [전체/롱폼/숏폼] 버튼 */}
+                    {/* 상단 헤더 및 필터 버튼 */}
                     <div className="flex items-center justify-between mb-5 pb-3 border-b border-slate-100">
                       <div className="flex items-center gap-2">
                         <PlayCircle size={18} className="text-red-500" />
@@ -752,7 +813,7 @@ export default function VlingStyleDashboard() {
                         </span>
                       </div>
 
-                      {/* 👇 [추가] 전체 / 롱폼 / 숏폼 분기 버튼 */}
+                      {/* 3개 분기 버튼 */}
                       <div className="flex bg-slate-100 p-1 rounded-lg gap-1">
                         <button
                           type="button"
@@ -797,35 +858,57 @@ export default function VlingStyleDashboard() {
                     ) : (
                       <div className="grid grid-cols-3 gap-4">
                         {filteredPosts.map((post, idx) => (
-                          <a
+                          <div
                             key={idx}
-                            href={post.post_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="group block rounded-xl overflow-hidden border border-slate-200 hover:shadow-md transition bg-slate-50"
+                            className="group block rounded-xl overflow-hidden border border-slate-200 hover:shadow-md transition bg-slate-50 flex flex-col justify-between"
                           >
-                            <div className="relative aspect-video overflow-hidden bg-slate-200">
-                              <img
-                                src={post.thumbnail_url}
-                                alt={post.title}
-                                className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                              />
-                              {(post.content_type === 'SHORTS' || (post.post_url && post.post_url.includes('/shorts/'))) && (
-                                <span className="absolute top-2 left-2 bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">
-                                  SHORTS
-                                </span>
-                              )}
-                            </div>
-                            <div className="p-3">
-                              <h4 className="text-xs font-medium text-slate-800 line-clamp-2 leading-relaxed group-hover:text-red-500 transition">
-                                {post.title}
-                              </h4>
-                              <div className="mt-2 flex items-center justify-between text-[11px] text-slate-400">
-                                <span>조회수 {(post.view_count || 0).toLocaleString()}회</span>
-                                <ExternalLink size={12} />
+                            <div>
+                              <div className="relative aspect-video overflow-hidden bg-slate-200">
+                                <img 
+                                  src={post.thumbnail_url} 
+                                  alt={post.title} 
+                                  className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                                />
+                                {(post.content_type === 'SHORTS' || (post.post_url && post.post_url.includes('/shorts/'))) && (
+                                  <span className="absolute top-2 left-2 bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">
+                                    SHORTS
+                                  </span>
+                                )}
+                              </div>
+                              <div className="p-3">
+                                <h4 className="text-xs font-medium text-slate-800 line-clamp-2 leading-relaxed">
+                                  {post.title}
+                                </h4>
                               </div>
                             </div>
-                          </a>
+
+                            {/* 하단 조회수 및 링크: PRO 잠금 영역 */}
+                            <div className="px-3 pb-3 pt-1 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                              {isProUser ? (
+                                <span className="text-slate-600 font-semibold">
+                                  조회수 {(post.view_count || 0).toLocaleString()}회
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setIsProUser(true)}
+                                  className="flex items-center gap-1 text-amber-600 hover:text-amber-700 font-bold bg-amber-50 px-2 py-0.5 rounded transition cursor-pointer"
+                                  title="클릭 시 PRO 모드 활성화"
+                                >
+                                  <Lock size={11} /> PRO 결제 후 조회수 보기
+                                </button>
+                              )}
+
+                              <a 
+                                href={post.post_url} 
+                                target="_blank" 
+                                rel="noreferrer"
+                                className="text-slate-400 hover:text-red-500 transition p-1"
+                              >
+                                <ExternalLink size={13} />
+                              </a>
+                            </div>
+                          </div>
                         ))}
                       </div>
                     )}
@@ -854,7 +937,7 @@ export default function VlingStyleDashboard() {
                             onClick={() => setIsProUser(true)}
                             className="px-5 py-2.5 bg-red-500 text-white rounded-lg text-xs font-bold hover:bg-red-600 shadow-md transition cursor-pointer"
                           >
-                            PRO 시뮬레이션 즉시 활성화
+                            PRO 결제하고 즉시 해금하기
                           </button>
                         </div>
                       </div>
@@ -882,7 +965,7 @@ export default function VlingStyleDashboard() {
                   </div>
                 )}
 
-                {/* [5] 전면 개편: PRO 시청자 분석 (도넛 원형 차트 + 국기/국가명 + 성별/연령 카드) */}
+                {/* [5] PRO 시청자 분석 탭 */}
                 {activeTab === 'audience' && (
                   <div>
                     {!isProUser ? (
@@ -904,13 +987,12 @@ export default function VlingStyleDashboard() {
                             onClick={() => setIsProUser(true)}
                             className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-yellow-500 text-white rounded-lg text-xs font-bold hover:brightness-105 shadow-md transition cursor-pointer"
                           >
-                            👑 PRO 시뮬레이션 즉시 해금
+                            👑 PRO 결제하고 즉시 해금하기
                           </button>
                         </div>
                       </div>
                     ) : (
                       <div className="space-y-6">
-                        {/* 1. 국가별 시청자 분포 (원형 도넛 차트 + 프로그레스 리스트) */}
                         <div className="bg-white p-7 rounded-2xl border border-slate-200 shadow-sm">
                           <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-6">
                             <div className="flex items-center gap-2">
@@ -923,11 +1005,9 @@ export default function VlingStyleDashboard() {
                           </div>
 
                           <div className="grid grid-cols-12 gap-8 items-center">
-                            {/* 좌측: SVG 도넛 원형 차트 */}
                             <div className="col-span-5 flex flex-col items-center justify-center relative">
                               <div className="relative w-44 h-44">
                                 <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90 transform">
-                                  {/* 배경 원 */}
                                   <circle
                                     cx="50"
                                     cy="50"
@@ -936,7 +1016,6 @@ export default function VlingStyleDashboard() {
                                     stroke="#f1f5f9"
                                     strokeWidth="12"
                                   />
-                                  {/* 국가별 조각들 */}
                                   {audienceStats.chartSlices.map((slice, i) => (
                                     <circle
                                       key={i}
@@ -952,7 +1031,6 @@ export default function VlingStyleDashboard() {
                                     />
                                   ))}
                                 </svg>
-                                {/* 중앙 텍스트 */}
                                 <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
                                   <span className="text-2xl">{audienceStats.items[0]?.flag || '🇰🇷'}</span>
                                   <span className="text-xs font-extrabold text-slate-800 mt-1">
@@ -966,7 +1044,6 @@ export default function VlingStyleDashboard() {
                               <p className="text-[11px] text-slate-400 mt-3 font-medium">주 타겟 국가 중심 분포</p>
                             </div>
 
-                            {/* 우측: 국가명 + 국기 + 프로그레스 바 목록 */}
                             <div className="col-span-7 space-y-4">
                               {audienceStats.items.map((item, idx) => (
                                 <div key={idx} className="space-y-1.5">
@@ -978,7 +1055,6 @@ export default function VlingStyleDashboard() {
                                     </div>
                                     <span className="font-extrabold text-slate-900">{item.percent}%</span>
                                   </div>
-                                  {/* 프로그레스 게이지 */}
                                   <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
                                     <div 
                                       style={{ width: `${item.percent}%`, backgroundColor: item.color }} 
@@ -991,15 +1067,11 @@ export default function VlingStyleDashboard() {
                           </div>
                         </div>
 
-                        {/* 2. 시청자 성별 및 핵심 연령대 추정 카드 */}
                         <div className="grid grid-cols-2 gap-5">
-                          {/* 성별 분포 */}
                           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                            <div className="flex items-center justify-between mb-4">
-                              <h4 className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                                <UserCheck size={16} className="text-blue-500" /> 시청자 성별 비율 (추정)
-                              </h4>
-                            </div>
+                            <h4 className="text-xs font-bold text-slate-700 flex items-center gap-1.5 mb-4">
+                              <UserCheck size={16} className="text-blue-500" /> 시청자 성별 비율 (추정)
+                            </h4>
                             <div className="space-y-3">
                               <div className="flex justify-between items-center text-xs font-bold">
                                 <span className="text-blue-600 flex items-center gap-1">남성 42%</span>
@@ -1013,7 +1085,6 @@ export default function VlingStyleDashboard() {
                             </div>
                           </div>
 
-                          {/* 주요 연령대 */}
                           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                             <h4 className="text-xs font-bold text-slate-700 mb-3 flex items-center gap-1.5">
                               <TrendingUp size={16} className="text-amber-500" /> 주 소비 연령층
