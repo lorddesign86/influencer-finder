@@ -330,7 +330,7 @@ export default function VlingStyleDashboard() {
       <aside className="w-64 border-r border-slate-200 bg-white flex flex-col justify-between flex-shrink-0">
         <div>
           <div className="h-16 flex items-center px-6 border-b border-slate-100 gap-2">
-            <span className="text-2xl font-black tracking-tight text-red-500">vling</span>
+            <span className="text-2xl font-black tracking-tight text-red-500">Findlist</span>
             <span className="text-xs bg-red-100 text-red-600 font-bold px-1.5 py-0.5 rounded">PRO</span>
           </div>
 
