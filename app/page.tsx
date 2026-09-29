@@ -66,7 +66,7 @@ const COUNTRY_MAP: Record<string, { name: string; flag: string; color: string }>
   others: { name: '기타 국가', flag: '🌐', color: '#94a3b8' }
 };
 
-// 무료용 무작위 셔플 함수
+// 무료용 배열 셔플 함수
 const shuffleArray = <T,>(array: T[]): T[] => {
   return [...array].sort(() => Math.random() - 0.5);
 };
@@ -86,7 +86,7 @@ export default function VlingStyleDashboard() {
   const [subRange, setSubRange] = useState<SubscriberRange>('all');
   const [sortBy, setSortBy] = useState<SortOption>('follower_desc');
 
-  // 영상 탭 필터 (전체 / 롱폼 / 숏폼)
+  // 영상 탭 필터 (ALL / VIDEO / SHORTS)
   const [videoTypeFilter, setVideoTypeFilter] = useState<'ALL' | 'VIDEO' | 'SHORTS'>('ALL');
 
   const fetchChannelPosts = async (channel: Influencer) => {
@@ -131,7 +131,12 @@ export default function VlingStyleDashboard() {
     setErrorMessage(null);
     try {
       if (!supabase) throw new Error('Supabase 클라이언트가 초기화되지 않았습니다.');
-      const { data, error } = await supabase.from('influencers').select('*');
+      const { data, error } = await supabase
+        .from('influencers')
+        .select('*')
+        .order('follower_count', { ascending: false })
+        .limit(5000);
+
       if (error) {
         setErrorMessage(error.message);
       } else if (data) {
@@ -151,7 +156,7 @@ export default function VlingStyleDashboard() {
     fetchChannels();
   }, []);
 
-  // [수식 연산 엔진]
+  // [수식 엔진] 콘텐츠 성과 분석
   const channelAnalytics = useMemo(() => {
     if (!posts || posts.length === 0) {
       return {
@@ -228,7 +233,7 @@ export default function VlingStyleDashboard() {
     };
   }, [posts, selectedChannel]);
 
-  // 시청자 국가 통계
+  // 시청자 국가 통계 연산
   const audienceStats = useMemo(() => {
     let rawLang = selectedChannel?.audience_languages;
     let parsed: Record<string, number> = {};
@@ -275,7 +280,7 @@ export default function VlingStyleDashboard() {
     return { items, chartSlices };
   }, [selectedChannel]);
 
-  // [채널 목록 필터링 + 무료 10개 랜덤 제한]
+  // [채널 목록 필터링 + 100만 이상 대형 채널 20개 랜덤 노출]
   const filteredInfluencers = useMemo(() => {
     const list = influencers
       .filter((item) => {
@@ -288,7 +293,7 @@ export default function VlingStyleDashboard() {
           (item.tags && item.tags.some(t => t.includes(selectedTag))) ||
           (item.name && item.name.includes(selectedTag));
 
-        // 구독자 필터는 PRO 사용자에게만 실제 필터링 적용
+        // 구독자 필터는 PRO 사용자에게만 적용
         const count = item.follower_count || 0;
         let matchesRange = true;
         if (isProUser) {
@@ -301,19 +306,24 @@ export default function VlingStyleDashboard() {
         return matchesSearch && matchesTag && matchesRange;
       })
       .sort((a, b) => {
-        if (!isProUser) return 0; // 무료 사용자는 기본 정렬 유지
+        if (!isProUser) return 0;
         if (sortBy === 'follower_desc') return (b.follower_count || 0) - (a.follower_count || 0);
         if (sortBy === 'views_desc') return (b.avg_views || 0) - (a.avg_views || 0);
         if (sortBy === 'engagement_desc') return (b.engagement_rate || 0) - (a.engagement_rate || 0);
         return 0;
       });
 
-    // 무료 모드: 무작위 10개 추출
+    // 무료 모드: 구독자 100만 명 이상 채널 중 랜덤 20개 노출
     if (!isProUser) {
-      return shuffleArray(list).slice(0, 10);
+      const megaPool = list.filter((item) => (item.follower_count || 0) >= 1000000);
+      const displayPool = megaPool.length >= 20 
+        ? megaPool 
+        : list.filter((item) => (item.follower_count || 0) >= 500000);
+
+      return shuffleArray(displayPool.length > 0 ? displayPool : list).slice(0, 20);
     }
 
-    // PRO 모드: 최대 1,000개 해금
+    // PRO 모드: 전체 1,000개 해금
     return list.slice(0, 1000);
   }, [influencers, search, selectedTag, subRange, sortBy, isProUser]);
 
@@ -337,13 +347,13 @@ export default function VlingStyleDashboard() {
 
   const handleProFilterClick = () => {
     if (!isProUser) {
-      alert('🔒 구독자 구간 및 정렬 필터는 PRO 멤버십 전용 기능입니다.\n좌측 하단이나 상단에서 PRO 플랜을 활성화해 주세요!');
+      alert('🔒 구독자 구간 및 정렬 필터는 PRO 멤버십 전용 기능입니다.\n좌측 하단 또는 상단에서 PRO 플랜을 활성화해 주세요!');
     }
   };
 
   return (
     <div className="flex h-screen bg-[#f8f9fa] text-slate-800 antialiased overflow-hidden font-sans">
-      {/* 1. 사이드바 */}
+      {/* 1. 좌측 사이드바 */}
       <aside className="w-64 border-r border-slate-200 bg-white flex flex-col justify-between flex-shrink-0">
         <div>
           <div className="h-16 flex items-center px-6 border-b border-slate-100 gap-2">
@@ -416,7 +426,7 @@ export default function VlingStyleDashboard() {
         </div>
       </aside>
 
-      {/* 2. 메인 영역 */}
+      {/* 2. 메인 컨텐츠 영역 */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* 상단 검색바 */}
         <header className="h-16 border-b border-slate-200 bg-white px-8 flex items-center justify-between flex-shrink-0">
@@ -457,7 +467,7 @@ export default function VlingStyleDashboard() {
           </div>
         </header>
 
-        {/* 상단 필터 바: 구독자/정렬 필터 PRO 잠금 처리 */}
+        {/* 상단 카테고리 & PRO 전용 필터 바 */}
         <div className="bg-white border-b border-slate-200 px-8 py-3 flex flex-wrap items-center justify-between gap-4 flex-shrink-0">
           <div className="flex items-center gap-1.5 overflow-x-auto py-1">
             <span className="text-xs font-bold text-slate-400 flex items-center gap-1 mr-1">
@@ -481,7 +491,6 @@ export default function VlingStyleDashboard() {
 
           {/* 구독자 & 정렬 필터 (PRO 전용 잠금) */}
           <div className="flex items-center gap-3 text-xs">
-            {/* 구독자 구간 필터 */}
             <div 
               onClick={handleProFilterClick}
               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition ${
@@ -507,7 +516,6 @@ export default function VlingStyleDashboard() {
               </select>
             </div>
 
-            {/* 정렬 필터 */}
             <div 
               onClick={handleProFilterClick}
               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition ${
@@ -550,9 +558,9 @@ export default function VlingStyleDashboard() {
           </div>
         )}
 
-        {/* 인플루언서 목록 & 우측 대시보드 */}
+        {/* 인플루언서 목록 & 우측 상세 영역 */}
         <div className="flex-1 flex overflow-hidden">
-          {/* 채널 목록 (무료: 랜덤 10개 + 하단 PRO 결제 더보기 배너) */}
+          {/* 채널 목록 (무료: 100만+ 채널 20개 무작위 / PRO: 1,000개 전체) */}
           <div className="w-1/3 border-r border-slate-200 overflow-y-auto bg-white flex flex-col justify-between">
             <div>
               <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 sticky top-0 z-10">
@@ -561,7 +569,7 @@ export default function VlingStyleDashboard() {
                 </span>
                 {!isProUser && (
                   <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                    무료 모드 (랜덤 10개)
+                    무료 체험 (100만+ 메가 채널 20개)
                   </span>
                 )}
               </div>
@@ -597,18 +605,18 @@ export default function VlingStyleDashboard() {
               )}
             </div>
 
-            {/* 무료 모드일 때 하단 고정 PRO 결제 더보기 배너 */}
+            {/* 무료 모드 하단 고정 배너 */}
             {!isProUser && (
               <div className="p-4 bg-gradient-to-t from-slate-50 to-white border-t border-slate-200 text-center sticky bottom-0">
                 <p className="text-xs text-slate-500 mb-2 font-medium">
-                  현재 무료 체험으로 <strong>랜덤 10개</strong>만 표시 중입니다.
+                  현재 무료 체험으로 100만+ 메가 채널 <strong>20개</strong>를 표시 중입니다.
                 </p>
                 <button
                   type="button"
                   onClick={() => setIsProUser(true)}
                   className="w-full py-2.5 px-4 bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-xl text-xs font-bold shadow-md hover:brightness-105 transition flex items-center justify-center gap-1.5 cursor-pointer"
                 >
-                  <Lock size={13} /> PRO 결제하고 전체 인플루언서 보기 →
+                  <Lock size={13} /> PRO 결제하고 전체 인플루언서 확인하기 →
                 </button>
               </div>
             )}
@@ -800,10 +808,9 @@ export default function VlingStyleDashboard() {
                   </div>
                 )}
 
-                {/* [3] 최근 영상 목록: [전체/롱폼/숏폼] 필터 + PRO 전용 조회수 잠금 */}
+                {/* [3] 최근 영상 목록: [전체/롱폼/숏폼] 필터 + PRO 조회수 잠금 */}
                 {activeTab === 'video' && (
                   <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                    {/* 상단 헤더 및 필터 버튼 */}
                     <div className="flex items-center justify-between mb-5 pb-3 border-b border-slate-100">
                       <div className="flex items-center gap-2">
                         <PlayCircle size={18} className="text-red-500" />
@@ -813,7 +820,6 @@ export default function VlingStyleDashboard() {
                         </span>
                       </div>
 
-                      {/* 3개 분기 버튼 */}
                       <div className="flex bg-slate-100 p-1 rounded-lg gap-1">
                         <button
                           type="button"
@@ -882,7 +888,7 @@ export default function VlingStyleDashboard() {
                               </div>
                             </div>
 
-                            {/* 하단 조회수 및 링크: PRO 잠금 영역 */}
+                            {/* 조회수 PRO 잠금/해금 영역 */}
                             <div className="px-3 pb-3 pt-1 border-t border-slate-100 flex items-center justify-between text-[11px]">
                               {isProUser ? (
                                 <span className="text-slate-600 font-semibold">
