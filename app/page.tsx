@@ -81,6 +81,23 @@ export default function VlingStyleDashboard() {
   const [selectedTag, setSelectedTag] = useState<string>('전체');
   const [subRange, setSubRange] = useState<SubscriberRange>('all');
   const [sortBy, setSortBy] = useState<SortOption>('follower_desc');
+  const [selectedTag, setSelectedTag] = useState<string>('전체');
+  const [subRange, setSubRange] = useState<SubscriberRange>('all');
+  const [sortBy, setSortBy] = useState<SortOption>('follower_desc');
+
+  // 👇 [추가] 영상 목록 필터 상태 (기본값: 'ALL')
+  const [videoTypeFilter, setVideoTypeFilter] = useState<'ALL' | 'VIDEO' | 'SHORTS'>('ALL');
+
+  // 👇 [추가] 선택된 버튼에 따른 영상 필터링
+  const filteredPosts = useMemo(() => {
+    return posts.filter((post) => {
+      if (videoTypeFilter === 'ALL') return true;
+      const isShorts = post.content_type === 'SHORTS' || (post.post_url && post.post_url.includes('/shorts/'));
+      if (videoTypeFilter === 'SHORTS') return isShorts;
+      if (videoTypeFilter === 'VIDEO') return !isShorts;
+      return true;
+    });
+  }, [posts, videoTypeFilter]);
 
   const fetchChannelPosts = async (channel: Influencer) => {
     if (!channel) return;
@@ -722,23 +739,64 @@ export default function VlingStyleDashboard() {
                   </div>
                 )}
 
-                {/* [3] 최근 영상 목록 그리드 */}
+{/* [3] 최근 영상 목록 그리드 */}
                 {activeTab === 'video' && (
                   <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                        <PlayCircle size={18} className="text-red-500" /> 수집된 영상 목록
-                      </h3>
-                      <span className="text-xs text-slate-400">{posts.length}개 분석됨</span>
+                    {/* 상단 헤더: 제목 + [전체/롱폼/숏폼] 버튼 */}
+                    <div className="flex items-center justify-between mb-5 pb-3 border-b border-slate-100">
+                      <div className="flex items-center gap-2">
+                        <PlayCircle size={18} className="text-red-500" />
+                        <h3 className="text-sm font-bold text-slate-800">수집된 영상 목록</h3>
+                        <span className="text-xs text-slate-400 font-normal">
+                          ({filteredPosts.length}개)
+                        </span>
+                      </div>
+
+                      {/* 👇 [추가] 전체 / 롱폼 / 숏폼 분기 버튼 */}
+                      <div className="flex bg-slate-100 p-1 rounded-lg gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setVideoTypeFilter('ALL')}
+                          className={`px-3 py-1 text-xs font-bold rounded-md transition cursor-pointer ${
+                            videoTypeFilter === 'ALL'
+                              ? 'bg-white text-slate-900 shadow-sm'
+                              : 'text-slate-500 hover:text-slate-800'
+                          }`}
+                        >
+                          전체
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setVideoTypeFilter('VIDEO')}
+                          className={`px-3 py-1 text-xs font-bold rounded-md transition cursor-pointer ${
+                            videoTypeFilter === 'VIDEO'
+                              ? 'bg-white text-blue-600 shadow-sm'
+                              : 'text-slate-500 hover:text-slate-800'
+                          }`}
+                        >
+                          롱폼
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setVideoTypeFilter('SHORTS')}
+                          className={`px-3 py-1 text-xs font-bold rounded-md transition cursor-pointer ${
+                            videoTypeFilter === 'SHORTS'
+                              ? 'bg-white text-red-600 shadow-sm'
+                              : 'text-slate-500 hover:text-slate-800'
+                          }`}
+                        >
+                          숏폼
+                        </button>
+                      </div>
                     </div>
 
                     {loadingPosts ? (
                       <p className="text-xs text-slate-400 py-6 text-center">영상 데이터를 불러오는 중...</p>
-                    ) : posts.length === 0 ? (
-                      <p className="text-xs text-slate-400 py-6 text-center">수집된 영상 데이터가 없습니다.</p>
+                    ) : filteredPosts.length === 0 ? (
+                      <p className="text-xs text-slate-400 py-6 text-center">해당 분류의 영상 데이터가 없습니다.</p>
                     ) : (
                       <div className="grid grid-cols-3 gap-4">
-                        {posts.map((post, idx) => (
+                        {filteredPosts.map((post, idx) => (
                           <a
                             key={idx}
                             href={post.post_url}
