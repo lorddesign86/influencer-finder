@@ -6,10 +6,12 @@ import {
   Search, Lock, Mail, ExternalLink, Video, Smartphone, 
   BarChart3, DollarSign, Film, Bookmark, AlertCircle, PlayCircle,
   Tag, Users, ArrowUpDown, PieChart, CheckCircle2, TrendingUp,
-  Globe2, UserCheck, ShieldCheck
-  BookOpen // 👈 이 항목이 들어있는지 확인!
+  Globe2, UserCheck, ShieldCheck, Heart, MessageSquare, Calendar, Eye
 } from 'lucide-react';
 
+// ==========================================
+// 1. 타입 정의 (유튜브 & 블로그)
+// ==========================================
 interface Influencer {
   channel_id: string;
   name: string;
@@ -48,52 +50,114 @@ interface Post {
   sponsor_brand?: string;
 }
 
-const CATEGORY_TAGS = ['전체', '맛집', '먹방', '여행', 'Vlog', 'IT', '뷰티', '패션', '게임'];
+interface BlogInfluencer {
+  blog_id: string;
+  name: string;
+  handle: string;
+  profile_url?: string;
+  profile_img_url: string;
+  fan_count: number;
+  follower_count: number;
+  daily_visitors: number;
+  avg_likes: number;
+  avg_comments: number;
+  contact_url: string | null;
+  tags: string[];
+}
+
+interface BlogPost {
+  post_id: string;
+  blog_id: string;
+  title: string;
+  summary: string;
+  post_url: string;
+  thumbnail_url: string;
+  like_count: number;
+  comment_count: number;
+  published_at: string;
+}
+
+// 카테고리 태그 정의
+const YOUTUBE_TAGS = ['전체', '맛집', '먹방', '여행', 'Vlog', 'IT', '뷰티', '패션', '게임'];
+const BLOG_CATEGORIES = [
+  '전체', '여행', '패션', '뷰티', '푸드', 'IT테크', '자동차', '리빙',
+  '육아', '생활건강', '게임', '동물·펫', '운동·레저', '프로스포츠',
+  '방송·연예', '대중음악', '영화', '공연·전시', '도서', '경제·비즈니스', '어학·교육'
+];
 
 type SubscriberRange = 'all' | 'under10k' | '10k_100k' | '100k_500k' | 'over500k';
-type SortOption = 'follower_desc' | 'views_desc' | 'engagement_desc';
+type YoutubeSortOption = 'follower_desc' | 'views_desc' | 'engagement_desc';
 
-const COUNTRY_MAP: Record<string, { name: string; flag: string; color: string }> = {
-  ko: { name: '대한민국', flag: '🇰🇷', color: '#ef4444' },
-  'ko-kr': { name: '대한민국', flag: '🇰🇷', color: '#ef4444' },
-  en: { name: '미국/글로벌', flag: '🇺🇸', color: '#3b82f6' },
-  'en-us': { name: '미국', flag: '🇺🇸', color: '#3b82f6' },
-  ja: { name: '일본', flag: '🇯🇵', color: '#ec4899' },
-  'ja-jp': { name: '일본', flag: '🇯🇵', color: '#ec4899' },
-  zh: { name: '대만/홍콩/중국', flag: '🇨🇳', color: '#f59e0b' },
-  vi: { name: '베트남', flag: '🇻🇳', color: '#10b981' },
-  id: { name: '인도네시아', flag: '🇮🇩', color: '#8b5cf6' },
-  th: { name: '태국', flag: '🇹🇭', color: '#06b6d4' },
-  others: { name: '기타 국가', flag: '🌐', color: '#94a3b8' }
-};
+type FanRange = 'all' | 'under1k' | 'over3k' | 'over5k' | 'over10k';
+type BlogSortOption = 'fan_desc' | 'visitors_desc' | 'follower_desc' | 'likes_desc' | 'comments_desc';
 
-// 무료용 무작위 셔플 함수
-const shuffleArray = <T,>(array: T[]): T[] => {
-  return [...array].sort(() => Math.random() - 0.5);
-};
+const shuffleArray = <T,>(array: T[]): T[] => [...array].sort(() => Math.random() - 0.5);
 
-export default function VlingStyleDashboard() {
+export default function PlatformDashboard() {
+  // ★ 현재 모드: 'youtube' | 'blog'
+  const [platformMode, setPlatformMode] = useState<'youtube' | 'blog'>('youtube');
+
+  // PRO 모드 (테스트용 기본 true)
+  const [isProUser, setIsProUser] = useState(true);
+
+  // 공통 검색어
+  const [search, setSearch] = useState('');
+
+  // ----------------------------------------------------
+  // 유튜브 상태값
+  // ----------------------------------------------------
   const [influencers, setInfluencers] = useState<Influencer[]>([]);
   const [selectedChannel, setSelectedChannel] = useState<Influencer | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loadingPosts, setLoadingPosts] = useState(false);
-  const [search, setSearch] = useState('');
-  const [activeTab, setActiveTab] = useState<'content_split' | 'channel' | 'video' | 'audience' | 'ad_cost'>('content_split');
-  
-  // 개발 편의를 위해 기본값을 true(PRO 모드)로 설정 (테스트 시 토글 가능)
-  const [isProUser, setIsProUser] = useState(true);
-  
+  const [ytTag, setYtTag] = useState('전체');
+  const [subRange, setSubRange] = useState<SubscriberRange>('all');
+  const [ytSort, setYtSort] = useState<YoutubeSortOption>('follower_desc');
+  const [videoTypeFilter, setVideoTypeFilter] = useState<'ALL' | 'VIDEO' | 'SHORTS'>('ALL');
+  const [ytTab, setYtTab] = useState<'content_split' | 'channel' | 'video' | 'audience' | 'ad_cost'>('content_split');
+
+  // ----------------------------------------------------
+  // 블로그 상태값
+  // ----------------------------------------------------
+  const [bloggers, setBloggers] = useState<BlogInfluencer[]>([]);
+  const [selectedBlogger, setSelectedBlogger] = useState<BlogInfluencer | null>(null);
+  const [blogPosts, setBlogPosts] = useState<BlogPost[]>([]);
+  const [loadingBlogPosts, setLoadingBlogPosts] = useState(false);
+  const [blogCat, setBlogCat] = useState('전체');
+  const [fanRange, setFanRange] = useState<FanRange>('all');
+  const [minVisitors, setMinVisitors] = useState('');
+  const [maxVisitors, setMaxVisitors] = useState('');
+  const [blogSort, setBlogSort] = useState<BlogSortOption>('fan_desc');
+
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const [selectedTag, setSelectedTag] = useState<string>('전체');
-  const [subRange, setSubRange] = useState<SubscriberRange>('all');
-  const [sortBy, setSortBy] = useState<SortOption>('follower_desc');
+  // ==========================================
+  // 데이터 불러오기 함수들
+  // ==========================================
+  const fetchYoutubeChannels = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('influencers')
+        .select('*')
+        .order('follower_count', { ascending: false })
+        .limit(2000);
+      if (error) throw error;
+      if (data) {
+        setInfluencers(data as Influencer[]);
+        if (data.length > 0 && !selectedChannel) {
+          handleSelectChannel(data[0] as Influencer);
+        }
+      }
+    } catch (err: any) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  // 영상 탭 필터 (ALL / VIDEO / SHORTS)
-  const [videoTypeFilter, setVideoTypeFilter] = useState<'ALL' | 'VIDEO' | 'SHORTS'>('ALL');
-
-  const fetchChannelPosts = async (channel: Influencer) => {
+  const fetchYoutubePosts = async (channel: Influencer) => {
     if (!channel) return;
     setLoadingPosts(true);
     try {
@@ -102,21 +166,13 @@ export default function VlingStyleDashboard() {
         const parts = cleanId.split('/');
         cleanId = parts[parts.length - 1];
       }
-
       const { data, error } = await supabase
         .from('influencer_posts')
         .select('*')
         .or(`channel_id.eq.${cleanId},channel_id.eq.${channel.channel_id}`)
         .limit(30);
-
-      if (error) {
-        console.error('Supabase fetch error:', error);
-        setPosts([]);
-      } else if (data) {
-        setPosts(data as Post[]);
-      }
+      if (!error && data) setPosts(data as Post[]);
     } catch (e) {
-      console.error(e);
       setPosts([]);
     } finally {
       setLoadingPosts(false);
@@ -125,166 +181,81 @@ export default function VlingStyleDashboard() {
 
   const handleSelectChannel = (channel: Influencer) => {
     setSelectedChannel(channel);
-    if (channel) {
-      fetchChannelPosts(channel);
-    }
+    if (channel) fetchYoutubePosts(channel);
   };
 
-  const fetchChannels = async () => {
+  const fetchBloggers = async () => {
     setLoading(true);
-    setErrorMessage(null);
     try {
-      if (!supabase) throw new Error('Supabase 클라이언트가 초기화되지 않았습니다.');
       const { data, error } = await supabase
-        .from('influencers')
+        .from('blog_influencers')
         .select('*')
-        .order('follower_count', { ascending: false })
-        .limit(5000);
-
-      if (error) {
-        setErrorMessage(error.message);
-      } else if (data) {
-        setInfluencers(data as Influencer[]);
-        if (data.length > 0 && !selectedChannel) {
-          handleSelectChannel(data[0] as Influencer);
+        .order('fan_count', { ascending: false })
+        .limit(2000);
+      if (error) throw error;
+      if (data) {
+        setBloggers(data as BlogInfluencer[]);
+        if (data.length > 0 && !selectedBlogger) {
+          handleSelectBlogger(data[0] as BlogInfluencer);
         }
       }
     } catch (err: any) {
-      setErrorMessage(err.message || '데이터를 불러오는 중 오류가 발생했습니다.');
+      console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
+  const fetchBloggerPosts = async (blogger: BlogInfluencer) => {
+    if (!blogger) return;
+    setLoadingBlogPosts(true);
+    try {
+      const { data, error } = await supabase
+        .from('blog_posts')
+        .select('*')
+        .eq('blog_id', blogger.blog_id)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      if (!error && data) setBlogPosts(data as BlogPost[]);
+    } catch (e) {
+      setBlogPosts([]);
+    } finally {
+      setLoadingBlogPosts(false);
+    }
+  };
+
+  const handleSelectBlogger = (blogger: BlogInfluencer) => {
+    setSelectedBlogger(blogger);
+    if (blogger) fetchBloggerPosts(blogger);
+  };
+
+  // 초기 로딩 (유튜브 + 블로그 둘 다 준비)
   useEffect(() => {
-    fetchChannels();
+    fetchYoutubeChannels();
+    fetchBloggers();
   }, []);
 
-  // [수식 엔진] 쇼츠 vs 롱폼 성과 지표 분석
-  const channelAnalytics = useMemo(() => {
-    if (!posts || posts.length === 0) {
-      return {
-        totalAnalyzed: 0,
-        shortsCount: 0,
-        videosCount: 0,
-        shortsRatio: 0,
-        videoRatio: 0,
-        avgShortsViews: 0,
-        avgVideoViews: 0,
-        estShortsCpv: 0,
-        estVideoCpv: 0,
-        engagementRate: selectedChannel?.engagement_rate || 0,
-        sponsoredCount: 0,
-        sponsoredRatio: 0
-      };
+  // 탭 변경 시 처리
+  const switchToYoutube = () => {
+    setPlatformMode('youtube');
+    setSearch('');
+    if (influencers.length > 0 && !selectedChannel) {
+      handleSelectChannel(influencers[0]);
     }
+  };
 
-    let shortsCount = 0;
-    let videosCount = 0;
-    let shortsViewSum = 0;
-    let videoViewSum = 0;
-    let totalInteractions = 0;
-    let totalViews = 0;
-    let sponsoredCount = 0;
-
-    posts.forEach((p) => {
-      const views = p.view_count || 0;
-      const likes = p.like_count || 0;
-      const comments = p.comment_count || 0;
-      totalViews += views;
-      totalInteractions += (likes + comments);
-
-      if (p.is_sponsored) sponsoredCount++;
-
-      const isShorts = p.content_type === 'SHORTS' || (p.post_url && p.post_url.includes('/shorts/'));
-      if (isShorts) {
-        shortsCount++;
-        shortsViewSum += views;
-      } else {
-        videosCount++;
-        videoViewSum += views;
-      }
-    });
-
-    const totalAnalyzed = posts.length;
-    const shortsRatio = totalAnalyzed > 0 ? Math.round((shortsCount / totalAnalyzed) * 100) : 0;
-    const videoRatio = 100 - shortsRatio;
-    const avgShortsViews = shortsCount > 0 ? Math.round(shortsViewSum / shortsCount) : 0;
-    const avgVideoViews = videosCount > 0 ? Math.round(videoViewSum / videosCount) : 0;
-
-    const estShortsCpv = Math.round(avgShortsViews * 15);
-    const estVideoCpv = Math.round(avgVideoViews * 35);
-
-    const engagementRate = totalViews > 0 
-      ? Number(((totalInteractions / totalViews) * 100).toFixed(2)) 
-      : (selectedChannel?.engagement_rate || 0);
-
-    const sponsoredRatio = totalAnalyzed > 0 ? Math.round((sponsoredCount / totalAnalyzed) * 100) : 0;
-
-    return {
-      totalAnalyzed,
-      shortsCount,
-      videosCount,
-      shortsRatio,
-      videoRatio,
-      avgShortsViews,
-      avgVideoViews,
-      estShortsCpv,
-      estVideoCpv,
-      engagementRate,
-      sponsoredCount,
-      sponsoredRatio
-    };
-  }, [posts, selectedChannel]);
-
-  // 시청자 국가 통계 연산
-  const audienceStats = useMemo(() => {
-    let rawLang = selectedChannel?.audience_languages;
-    let parsed: Record<string, number> = {};
-
-    if (rawLang && typeof rawLang === 'object' && Object.keys(rawLang).length > 0) {
-      parsed = { ...rawLang };
-    } else {
-      parsed = { ko: 94.2, en: 3.8, ja: 2.0 };
+  const switchToBlog = () => {
+    setPlatformMode('blog');
+    setSearch('');
+    if (bloggers.length > 0 && !selectedBlogger) {
+      handleSelectBlogger(bloggers[0]);
     }
+  };
 
-    const keys = Object.keys(parsed);
-    if (keys.length === 1 && (parsed[keys[0]] === 100 || parsed[keys[0]] === 1)) {
-      const main = keys[0].toLowerCase();
-      parsed = { [main]: 92.5, en: 5.2, others: 2.3 };
-    }
-
-    const total = Object.values(parsed).reduce((acc, v) => acc + Number(v), 0) || 100;
-    const items = Object.entries(parsed).map(([key, val]) => {
-      const lower = key.toLowerCase();
-      const meta = COUNTRY_MAP[lower] || COUNTRY_MAP['others'];
-      const percent = Number(((Number(val) / total) * 100).toFixed(1));
-      return {
-        key: lower,
-        name: meta.name,
-        flag: meta.flag,
-        color: meta.color,
-        percent
-      };
-    }).sort((a, b) => b.percent - a.percent);
-
-    const circumference = 2 * Math.PI * 40;
-    let accumulatedPercent = 0;
-    const chartSlices = items.map((item) => {
-      const strokeLength = (item.percent / 100) * circumference;
-      const strokeDashoffset = -((accumulatedPercent / 100) * circumference);
-      accumulatedPercent += item.percent;
-      return {
-        ...item,
-        strokeDasharray: `${strokeLength} ${circumference}`,
-        strokeDashoffset
-      };
-    });
-
-    return { items, chartSlices };
-  }, [selectedChannel]);
-
-  // [채널 목록 필터링 + 무료 100만+ 채널 20개 노출]
+  // ==========================================
+  // 필터링 연산
+  // ==========================================
+  // 유튜브 필터
   const filteredInfluencers = useMemo(() => {
     const list = influencers
       .filter((item) => {
@@ -293,11 +264,10 @@ export default function VlingStyleDashboard() {
           (item.name && item.name.toLowerCase().includes(q)) || 
           (item.handle && item.handle.toLowerCase().includes(q));
 
-        const matchesTag = selectedTag === '전체' || 
-          (item.tags && item.tags.some(t => t.includes(selectedTag))) ||
-          (item.name && item.name.includes(selectedTag));
+        const matchesTag = ytTag === '전체' || 
+          (item.tags && item.tags.some(t => t.includes(ytTag))) ||
+          (item.name && item.name.includes(ytTag));
 
-        // 구독자 필터는 PRO 사용자에게만 적용
         const count = item.follower_count || 0;
         let matchesRange = true;
         if (isProUser) {
@@ -311,77 +281,140 @@ export default function VlingStyleDashboard() {
       })
       .sort((a, b) => {
         if (!isProUser) return 0;
-        if (sortBy === 'follower_desc') return (b.follower_count || 0) - (a.follower_count || 0);
-        if (sortBy === 'views_desc') return (b.avg_views || 0) - (a.avg_views || 0);
-        if (sortBy === 'engagement_desc') return (b.engagement_rate || 0) - (a.engagement_rate || 0);
+        if (ytSort === 'follower_desc') return (b.follower_count || 0) - (a.follower_count || 0);
+        if (ytSort === 'views_desc') return (b.avg_views || 0) - (a.avg_views || 0);
+        if (ytSort === 'engagement_desc') return (b.engagement_rate || 0) - (a.engagement_rate || 0);
         return 0;
       });
 
-    // 무료 모드: 100만 이상 대형 채널 20개 무작위 선별
     if (!isProUser) {
-      const megaPool = list.filter((item) => (item.follower_count || 0) >= 1000000);
-      const displayPool = megaPool.length >= 20 
-        ? megaPool 
-        : list.filter((item) => (item.follower_count || 0) >= 500000);
-
-      return shuffleArray(displayPool.length > 0 ? displayPool : list).slice(0, 20);
+      const mega = list.filter((i) => (i.follower_count || 0) >= 1000000);
+      return shuffleArray(mega.length >= 20 ? mega : list).slice(0, 20);
     }
-
-    // PRO 모드: 전체 1,000개 해금
     return list.slice(0, 1000);
-  }, [influencers, search, selectedTag, subRange, sortBy, isProUser]);
+  }, [influencers, search, ytTag, subRange, ytSort, isProUser]);
 
-  // 영상 목록 필터 (전체 / 롱폼 / 숏폼)
-  const filteredPosts = useMemo(() => {
-    return posts.filter((post) => {
-      if (videoTypeFilter === 'ALL') return true;
-      const isShorts = post.content_type === 'SHORTS' || (post.post_url && post.post_url.includes('/shorts/'));
-      if (videoTypeFilter === 'SHORTS') return isShorts;
-      if (videoTypeFilter === 'VIDEO') return !isShorts;
-      return true;
-    });
-  }, [posts, videoTypeFilter]);
+  // 블로그 필터
+  const filteredBloggers = useMemo(() => {
+    const list = bloggers
+      .filter((item) => {
+        const q = search.trim().toLowerCase();
+        const matchesSearch = !q || 
+          (item.name && item.name.toLowerCase().includes(q)) || 
+          (item.handle && item.handle.toLowerCase().includes(q));
 
-  const resetFilters = () => {
-    setSearch('');
-    setSelectedTag('전체');
-    setSubRange('all');
-    setSortBy('follower_desc');
-  };
+        const matchesCat = blogCat === '전체' || 
+          (item.tags && item.tags.some(t => t.includes(blogCat))) ||
+          (item.name && item.name.includes(blogCat));
 
-  const handleProFilterClick = () => {
+        const fans = item.fan_count || 0;
+        let matchesFan = true;
+        if (fanRange === 'under1k') matchesFan = fans <= 1000;
+        else if (fanRange === 'over3k') matchesFan = fans >= 3000;
+        else if (fanRange === 'over5k') matchesFan = fans >= 5000;
+        else if (fanRange === 'over10k') matchesFan = fans >= 10000;
+
+        const visitors = item.daily_visitors || 0;
+        let matchesVisitors = true;
+        const minV = minVisitors ? parseInt(minVisitors, 10) : null;
+        const maxV = maxVisitors ? parseInt(maxVisitors, 10) : null;
+        if (minV !== null && !isNaN(minV) && visitors < minV) matchesVisitors = false;
+        if (maxV !== null && !isNaN(maxV) && visitors > maxV) matchesVisitors = false;
+
+        return matchesSearch && matchesCat && matchesFan && matchesVisitors;
+      })
+      .sort((a, b) => {
+        if (!isProUser) return 0;
+        if (blogSort === 'fan_desc') return (b.fan_count || 0) - (a.fan_count || 0);
+        if (blogSort === 'visitors_desc') return (b.daily_visitors || 0) - (a.daily_visitors || 0);
+        if (blogSort === 'follower_desc') return (b.follower_count || 0) - (a.follower_count || 0);
+        if (blogSort === 'likes_desc') return (b.avg_likes || 0) - (a.avg_likes || 0);
+        if (blogSort === 'comments_desc') return (b.avg_comments || 0) - (a.avg_comments || 0);
+        return 0;
+      });
+
     if (!isProUser) {
-      alert('🔒 구독자 구간 및 정렬 필터는 PRO 멤버십 전용 기능입니다.\n좌측 하단이나 상단에서 PRO 플랜을 활성화해 주세요!');
+      return shuffleArray(list).slice(0, 20);
     }
-  };
+    return list.slice(0, 1000);
+  }, [bloggers, search, blogCat, fanRange, minVisitors, maxVisitors, blogSort, isProUser]);
+
+  // 쇼츠 vs 롱폼 분석 지표
+  const channelAnalytics = useMemo(() => {
+    if (!posts || posts.length === 0) {
+      return {
+        totalAnalyzed: 0, shortsCount: 0, videosCount: 0, shortsRatio: 0, videoRatio: 0,
+        avgShortsViews: 0, avgVideoViews: 0, estShortsCpv: 0, estVideoCpv: 0,
+        engagementRate: selectedChannel?.engagement_rate || 0, sponsoredCount: 0, sponsoredRatio: 0
+      };
+    }
+    let shortsCount = 0, videosCount = 0, shortsViewSum = 0, videoViewSum = 0, totalInteractions = 0, totalViews = 0, sponsoredCount = 0;
+    posts.forEach((p) => {
+      const views = p.view_count || 0;
+      totalViews += views;
+      totalInteractions += ((p.like_count || 0) + (p.comment_count || 0));
+      if (p.is_sponsored) sponsoredCount++;
+      const isShorts = p.content_type === 'SHORTS' || (p.post_url && p.post_url.includes('/shorts/'));
+      if (isShorts) { shortsCount++; shortsViewSum += views; }
+      else { videosCount++; videoViewSum += views; }
+    });
+    const totalAnalyzed = posts.length;
+    const shortsRatio = totalAnalyzed > 0 ? Math.round((shortsCount / totalAnalyzed) * 100) : 0;
+    const avgShortsViews = shortsCount > 0 ? Math.round(shortsViewSum / shortsCount) : 0;
+    const avgVideoViews = videosCount > 0 ? Math.round(videoViewSum / videosCount) : 0;
+    return {
+      totalAnalyzed, shortsCount, videosCount, shortsRatio, videoRatio: 100 - shortsRatio,
+      avgShortsViews, avgVideoViews,
+      estShortsCpv: Math.round(avgShortsViews * 15),
+      estVideoCpv: Math.round(avgVideoViews * 35),
+      engagementRate: totalViews > 0 ? Number(((totalInteractions / totalViews) * 100).toFixed(2)) : (selectedChannel?.engagement_rate || 0),
+      sponsoredCount,
+      sponsoredRatio: totalAnalyzed > 0 ? Math.round((sponsoredCount / totalAnalyzed) * 100) : 0
+    };
+  }, [posts, selectedChannel]);
 
   return (
     <div className="flex h-screen bg-[#f8f9fa] text-slate-800 antialiased overflow-hidden font-sans">
-      {/* 1. 사이드바 */}
+      {/* ==========================================
+          1. 고정 좌측 사이드바 (완벽 일치)
+      ========================================== */}
       <aside className="w-64 border-r border-slate-200 bg-white flex flex-col justify-between flex-shrink-0">
         <div>
           <div className="h-16 flex items-center px-6 border-b border-slate-100 gap-2">
             <span className="text-2xl font-black tracking-tight text-red-500">vling</span>
-            <span className="text-xs bg-red-100 text-red-600 font-bold px-1.5 py-0.5 rounded">PRO</span>
+            <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
+              platformMode === 'blog' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
+            }`}>
+              {platformMode === 'blog' ? 'BLOG PRO' : 'PRO'}
+            </span>
           </div>
 
           <div className="p-4 space-y-6">
             <div>
               <p className="text-xs font-semibold text-slate-400 px-3 mb-2 tracking-wider">인플루언서 탐색</p>
               <nav className="space-y-1">
+                {/* 1) 유튜버 찾기 버튼 */}
                 <button 
                   type="button"
-                  onClick={resetFilters}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold bg-red-50 text-red-600 transition cursor-pointer"
+                  onClick={switchToYoutube}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition cursor-pointer ${
+                    platformMode === 'youtube' ? 'bg-red-50 text-red-600' : 'text-slate-600 hover:bg-slate-50'
+                  }`}
                 >
                   <Search size={18} /> 유튜버 찾기
                 </button>
-                <a 
-                  href="/blog"
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+
+                {/* 2) 블로그인플루언서 찾기 버튼 */}
+                <button 
+                  type="button"
+                  onClick={switchToBlog}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition cursor-pointer ${
+                    platformMode === 'blog' ? 'bg-green-50 text-green-700' : 'text-slate-600 hover:bg-slate-50'
+                  }`}
                 >
-                  <BookOpen size={18} /> 블로그인플루언서 찾기
-                </a>
+                  <span className="text-base leading-none">📝</span> 블로그인플루언서 찾기
+                </button>
+
                 <button 
                   type="button"
                   onClick={() => alert('영상 라이브러리 기능 준비 중입니다.')}
@@ -427,7 +460,9 @@ export default function VlingStyleDashboard() {
             onClick={() => setIsProUser(!isProUser)}
             className={`w-full py-2.5 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm cursor-pointer ${
               isProUser 
-                ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-white shadow-yellow-200' 
+                ? platformMode === 'blog'
+                  ? 'bg-gradient-to-r from-green-600 to-emerald-500 text-white'
+                  : 'bg-gradient-to-r from-amber-500 to-yellow-400 text-white'
                 : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
             }`}
           >
@@ -436,18 +471,22 @@ export default function VlingStyleDashboard() {
         </div>
       </aside>
 
-      {/* 2. 메인 컨텐츠 영역 */}
+      {/* ==========================================
+          2. 메인 컨텐츠 영역
+      ========================================== */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* 상단 헤더 */}
+        {/* 상단 공통 헤더: 현재 모드에 따라 DB 검색 대상 분기 */}
         <header className="h-16 border-b border-slate-200 bg-white px-8 flex items-center justify-between flex-shrink-0">
           <div className="relative w-96 flex items-center">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
             <input 
               type="text" 
-              placeholder="유튜버 이름 또는 핸들 검색..." 
+              placeholder={platformMode === 'youtube' ? "유튜버 이름 또는 핸들 검색..." : "블로거 이름 또는 네이버 아이디 검색..."} 
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-10 py-2 border border-slate-200 rounded-full text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition"
+              className={`w-full pl-10 pr-10 py-2 border border-slate-200 rounded-full text-sm bg-slate-50 focus:bg-white focus:outline-none transition ${
+                platformMode === 'blog' ? 'focus:ring-2 focus:ring-green-600' : 'focus:ring-2 focus:ring-red-500'
+              }`}
             />
             {search && (
               <button 
@@ -470,56 +509,47 @@ export default function VlingStyleDashboard() {
             <button 
               type="button"
               onClick={() => setIsProUser(true)}
-              className="text-xs font-semibold bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 shadow-sm transition cursor-pointer flex items-center gap-1.5"
+              className={`text-xs font-semibold text-white px-4 py-2 rounded-lg shadow-sm transition cursor-pointer flex items-center gap-1.5 ${
+                platformMode === 'blog' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-500 hover:bg-red-600'
+              }`}
             >
               <Lock size={12} /> PRO 업그레이드
             </button>
           </div>
         </header>
 
-        {/* 상단 카테고리 태그 및 PRO 전용 필터 바 */}
-        <div className="bg-white border-b border-slate-200 px-8 py-3 flex flex-wrap items-center justify-between gap-4 flex-shrink-0">
-          <div className="flex items-center gap-1.5 overflow-x-auto py-1">
-            <span className="text-xs font-bold text-slate-400 flex items-center gap-1 mr-1">
-              <Tag size={13} /> 분류:
-            </span>
-            {CATEGORY_TAGS.map((tag) => (
-              <button
-                key={tag}
-                type="button"
-                onClick={() => setSelectedTag(tag)}
-                className={`px-3 py-1 rounded-full text-xs font-semibold transition cursor-pointer ${
-                  selectedTag === tag 
-                    ? 'bg-red-500 text-white shadow-sm' 
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                {tag}
-              </button>
-            ))}
-          </div>
-
-          {/* 구독자 & 정렬 필터 (무료 모드 시 완전 잠금 오버레이 적용) */}
-          <div className="flex items-center gap-3 text-xs">
-            {/* 1. 구독자 구간 필터 */}
-            <div className="relative">
-              <div
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition ${
-                  isProUser 
-                    ? 'bg-slate-50 border-slate-200' 
-                    : 'bg-slate-100/80 border-dashed border-amber-300'
-                }`}
-              >
-                {isProUser ? <Users size={14} className="text-slate-400" /> : <Lock size={14} className="text-amber-500" />}
-                <select
-                  disabled={!isProUser}
-                  value={subRange}
-                  onChange={(e) => setSubRange(e.target.value as SubscriberRange)}
-                  className={`bg-transparent font-medium outline-none ${
-                    isProUser ? 'text-slate-700 cursor-pointer' : 'text-slate-400 pointer-events-none'
+        {/* ----------------------------------------------------
+            A. 유튜브 모드일 때의 상단 필터 바
+        ---------------------------------------------------- */}
+        {platformMode === 'youtube' && (
+          <div className="bg-white border-b border-slate-200 px-8 py-3 flex flex-wrap items-center justify-between gap-4 flex-shrink-0">
+            <div className="flex items-center gap-1.5 overflow-x-auto py-1">
+              <span className="text-xs font-bold text-slate-400 flex items-center gap-1 mr-1">
+                <Tag size={13} /> 분류:
+              </span>
+              {YOUTUBE_TAGS.map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => setYtTag(tag)}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold transition cursor-pointer ${
+                    ytTag === tag ? 'bg-red-500 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
-                  <option value="all">구독자 전체 {!isProUser && '(PRO)'}</option>
+                  {tag}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-3 text-xs">
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border bg-slate-50 border-slate-200">
+                <Users size={14} className="text-slate-400" />
+                <select
+                  value={subRange}
+                  onChange={(e) => setSubRange(e.target.value as SubscriberRange)}
+                  className="bg-transparent font-medium outline-none text-slate-700 cursor-pointer"
+                >
+                  <option value="all">구독자 전체</option>
                   <option value="under10k">1만 미만</option>
                   <option value="10k_100k">1만 ~ 10만</option>
                   <option value="100k_500k">10만 ~ 50만</option>
@@ -527,632 +557,476 @@ export default function VlingStyleDashboard() {
                 </select>
               </div>
 
-              {/* 무료 모드일 때 클릭 가로채는 투명 오버레이 버튼 */}
-              {!isProUser && (
-                <button
-                  type="button"
-                  onClick={handleProFilterClick}
-                  className="absolute inset-0 w-full h-full cursor-pointer z-10 bg-transparent"
-                  title="PRO 전용 필터"
-                />
-              )}
-            </div>
-
-            {/* 2. 정렬 순서 필터 */}
-            <div className="relative">
-              <div
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition ${
-                  isProUser 
-                    ? 'bg-slate-50 border-slate-200' 
-                    : 'bg-slate-100/80 border-dashed border-amber-300'
-                }`}
-              >
-                {isProUser ? <ArrowUpDown size={14} className="text-slate-400" /> : <Lock size={14} className="text-amber-500" />}
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border bg-slate-50 border-slate-200">
+                <ArrowUpDown size={14} className="text-slate-400" />
                 <select
-                  disabled={!isProUser}
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as SortOption)}
-                  className={`bg-transparent font-medium outline-none ${
-                    isProUser ? 'text-slate-700 cursor-pointer' : 'text-slate-400 pointer-events-none'
-                  }`}
+                  value={ytSort}
+                  onChange={(e) => setYtSort(e.target.value as YoutubeSortOption)}
+                  className="bg-transparent font-medium outline-none text-slate-700 cursor-pointer"
                 >
-                  <option value="follower_desc">구독자 많은 순 {!isProUser && '(PRO)'}</option>
+                  <option value="follower_desc">구독자 많은 순</option>
                   <option value="views_desc">평균 조회수 높은 순</option>
                   <option value="engagement_desc">참여율 높은 순</option>
                 </select>
               </div>
 
-              {/* 무료 모드일 때 클릭 가로채는 투명 오버레이 버튼 */}
-              {!isProUser && (
+              {(ytTag !== '전체' || subRange !== 'all' || search !== '') && (
                 <button
                   type="button"
-                  onClick={handleProFilterClick}
-                  className="absolute inset-0 w-full h-full cursor-pointer z-10 bg-transparent"
-                  title="PRO 전용 정렬"
-                />
+                  onClick={() => { setYtTag('전체'); setSubRange('all'); setSearch(''); }}
+                  className="text-xs text-red-500 hover:underline font-semibold ml-1 cursor-pointer"
+                >
+                  초기화
+                </button>
               )}
             </div>
-
-            {/* 초기화 버튼 */}
-            {isProUser && (selectedTag !== '전체' || subRange !== 'all' || search !== '' || sortBy !== 'follower_desc') && (
-              <button
-                type="button"
-                onClick={resetFilters}
-                className="text-xs text-red-500 hover:underline font-semibold ml-1 cursor-pointer"
-              >
-                초기화
-              </button>
-            )}
-          </div>
-        </div>
-
-        {errorMessage && (
-          <div className="bg-red-50 border-b border-red-200 px-8 py-2.5 flex items-center gap-2 text-xs text-red-600">
-            <AlertCircle size={16} />
-            <span>데이터베이스 연결 오류: {errorMessage}</span>
           </div>
         )}
 
-        {/* 인플루언서 목록 & 우측 분석 대시보드 */}
-        <div className="flex-1 flex overflow-hidden">
-          {/* 채널 목록 (무료: 100만+ 채널 20개 무작위 / PRO: 1,000개 전체) */}
-          <div className="w-1/3 border-r border-slate-200 overflow-y-auto bg-white flex flex-col justify-between">
-            <div>
-              <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 sticky top-0 z-10">
-                <span className="text-xs font-bold text-slate-500">
-                  인플루언서 목록 ({filteredInfluencers.length}개 {isProUser ? '전체' : '샘플'})
-                </span>
-                {!isProUser && (
-                  <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                    무료 체험 (100만+ 메가 채널 20개)
-                  </span>
-                )}
-              </div>
-
-              {loading ? (
-                <div className="p-8 text-center text-sm text-slate-400">데이터를 불러오는 중...</div>
-              ) : filteredInfluencers.length === 0 ? (
-                <div className="p-8 text-center text-sm text-slate-400">일치하는 인플루언서가 없습니다.</div>
-              ) : (
-                filteredInfluencers.map((channel) => (
-                  <div 
-                    key={channel.channel_id}
-                    onClick={() => handleSelectChannel(channel)}
-                    className={`p-4 border-b border-slate-100 flex items-center gap-3 cursor-pointer transition ${
-                      selectedChannel?.channel_id === channel.channel_id ? 'bg-red-50/60 border-l-4 border-l-red-500' : 'hover:bg-slate-50'
-                    }`}
-                  >
-                    <img 
-                      src={channel.profile_img_url || 'https://via.placeholder.com/150'} 
-                      alt={channel.name} 
-                      className="w-12 h-12 rounded-full border border-slate-200 object-cover flex-shrink-0"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <h4 className="text-sm font-bold text-slate-900 truncate">{channel.name}</h4>
-                      <p className="text-xs text-slate-400 truncate">{channel.handle}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[11px] font-semibold text-slate-600">구독자 {(channel.follower_count / 10000).toFixed(1)}만</span>
-                        <span className="text-[11px] text-slate-400">• 평균조회 {(channel.avg_views / 10000).toFixed(1)}만</span>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
+        {/* ----------------------------------------------------
+            B. 블로그 모드일 때의 상단 필터 바 (21개 태그 + 팬수/일방문자 직접입력)
+        ---------------------------------------------------- */}
+        {platformMode === 'blog' && (
+          <div>
+            {/* 1행: 21개 네이버 공식 카테고리 */}
+            <div className="bg-white border-b border-slate-200 px-8 py-2.5 flex items-center gap-2 overflow-x-auto flex-shrink-0">
+              <span className="text-xs font-bold text-slate-400 flex items-center gap-1 flex-shrink-0">
+                <Tag size={13} /> 분류:
+              </span>
+              {BLOG_CATEGORIES.map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setBlogCat(cat)}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition cursor-pointer flex-shrink-0 ${
+                    blogCat === cat ? 'bg-green-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
             </div>
 
-            {/* 무료 모드 하단 고정 배너 */}
-            {!isProUser && (
-              <div className="p-4 bg-gradient-to-t from-slate-50 to-white border-t border-slate-200 text-center sticky bottom-0">
-                <p className="text-xs text-slate-500 mb-2 font-medium">
-                  현재 무료 체험으로 100만+ 메가 채널 <strong>20개</strong>를 표시 중입니다.
-                </p>
+            {/* 2행: 팬수 구간 & 일방문자 숫자 직접입력 (Min ~ Max) */}
+            <div className="bg-slate-50/80 border-b border-slate-200 px-8 py-2.5 flex flex-wrap items-center justify-between gap-4 flex-shrink-0">
+              <div className="flex flex-wrap items-center gap-3 text-xs">
+                {/* 팬수 */}
+                <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border bg-white border-slate-200">
+                  <Users size={14} className="text-slate-400" />
+                  <select
+                    value={fanRange}
+                    onChange={(e) => setFanRange(e.target.value as FanRange)}
+                    className="bg-transparent font-medium outline-none text-slate-700 cursor-pointer"
+                  >
+                    <option value="all">팬 수 전체</option>
+                    <option value="under1k">1,000명 이하</option>
+                    <option value="over3k">3,000명 이상</option>
+                    <option value="over5k">5,000명 이상</option>
+                    <option value="over10k">1만명 이상</option>
+                  </select>
+                </div>
+
+                {/* 일방문자 직접입력 */}
+                <div className="flex items-center gap-1 bg-white px-2.5 py-1 rounded-lg border border-slate-200">
+                  <Eye size={13} className="text-slate-400 mr-1" />
+                  <span className="text-slate-500 font-medium">일방문자:</span>
+                  <input
+                    type="number"
+                    placeholder="최소(명)"
+                    value={minVisitors}
+                    onChange={(e) => setMinVisitors(e.target.value)}
+                    className="w-16 px-1.5 py-0.5 border border-slate-200 rounded text-center outline-none focus:border-green-500 text-slate-700"
+                  />
+                  <span className="text-slate-400">~</span>
+                  <input
+                    type="number"
+                    placeholder="최대(명)"
+                    value={maxVisitors}
+                    onChange={(e) => setMaxVisitors(e.target.value)}
+                    className="w-16 px-1.5 py-0.5 border border-slate-200 rounded text-center outline-none focus:border-green-500 text-slate-700"
+                  />
+                </div>
+
+                {/* 블로그 정렬 */}
+                <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border bg-white border-slate-200">
+                  <ArrowUpDown size={14} className="text-slate-400" />
+                  <select
+                    value={blogSort}
+                    onChange={(e) => setBlogSort(e.target.value as BlogSortOption)}
+                    className="bg-transparent font-medium outline-none text-slate-700 cursor-pointer"
+                  >
+                    <option value="fan_desc">인플루언서 팬 많은 순</option>
+                    <option value="visitors_desc">일일 방문자 많은 순</option>
+                    <option value="follower_desc">이웃(팔로워) 많은 순</option>
+                    <option value="likes_desc">평균 공감 많은 순</option>
+                    <option value="comments_desc">평균 댓글 많은 순</option>
+                  </select>
+                </div>
+              </div>
+
+              {(blogCat !== '전체' || fanRange !== 'all' || minVisitors !== '' || maxVisitors !== '' || search !== '') && (
                 <button
                   type="button"
-                  onClick={() => setIsProUser(true)}
-                  className="w-full py-2.5 px-4 bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-xl text-xs font-bold shadow-md hover:brightness-105 transition flex items-center justify-center gap-1.5 cursor-pointer"
+                  onClick={() => { setBlogCat('전체'); setFanRange('all'); setMinVisitors(''); setMaxVisitors(''); setSearch(''); }}
+                  className="text-xs text-green-600 hover:underline font-semibold cursor-pointer"
                 >
-                  <Lock size={13} /> PRO 결제하고 전체 인플루언서 확인하기 →
+                  필터 초기화
                 </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
+        )}
 
-          {/* 우측 분석 대시보드 */}
-          <div className="flex-1 overflow-y-auto p-8 bg-[#f8f9fa]">
-            {selectedChannel ? (
-              <div className="max-w-4xl mx-auto space-y-6">
-                {/* 상단 프로필 카드 */}
-                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-start justify-between">
-                  <div className="flex gap-4">
-                    <img 
-                      src={selectedChannel.profile_img_url || 'https://via.placeholder.com/150'} 
-                      alt={selectedChannel.name} 
-                      className="w-16 h-16 rounded-full border border-slate-200 object-cover"
-                    />
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h2 className="text-xl font-bold text-slate-900">{selectedChannel.name}</h2>
-                        <span className="text-xs px-2 py-0.5 bg-slate-100 text-slate-600 rounded font-medium">{selectedChannel.primary_language?.toUpperCase() || 'KO'}</span>
-                      </div>
-                      <p className="text-sm text-slate-400 mt-0.5">{selectedChannel.handle}</p>
-                      <div className="flex flex-wrap gap-1.5 mt-3">
-                        {(selectedChannel.tags || []).map((t, idx) => (
-                          <span key={idx} className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-medium">#{t}</span>
-                        ))}
-                      </div>
-                    </div>
+        {/* ----------------------------------------------------
+            3. 본문 뷰 (유튜브 vs 블로그 스위칭)
+        ---------------------------------------------------- */}
+        <div className="flex-1 flex overflow-hidden">
+          {/* =======================
+              유튜브 본문 레이아웃
+          ======================= */}
+          {platformMode === 'youtube' && (
+            <>
+              {/* 채널 목록 */}
+              <div className="w-1/3 border-r border-slate-200 overflow-y-auto bg-white flex flex-col justify-between">
+                <div>
+                  <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 sticky top-0 z-10">
+                    <span className="text-xs font-bold text-slate-500">
+                      인플루언서 목록 ({filteredInfluencers.length}개 {isProUser ? '전체' : '샘플'})
+                    </span>
                   </div>
-                  <div className="flex gap-2">
-                    <button 
-                      type="button"
-                      onClick={() => alert(`문의 이메일: ${selectedChannel.contact_email || '등록된 이메일이 없습니다.'}`)}
-                      className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 border border-slate-200 rounded-lg hover:bg-slate-50 transition cursor-pointer"
-                    >
-                      <Mail size={14} /> 문의하기
-                    </button>
-                  </div>
+
+                  {loading ? (
+                    <div className="p-8 text-center text-sm text-slate-400">데이터를 불러오는 중...</div>
+                  ) : filteredInfluencers.length === 0 ? (
+                    <div className="p-8 text-center text-sm text-slate-400">일치하는 인플루언서가 없습니다.</div>
+                  ) : (
+                    filteredInfluencers.map((channel) => (
+                      <div 
+                        key={channel.channel_id}
+                        onClick={() => handleSelectChannel(channel)}
+                        className={`p-4 border-b border-slate-100 flex items-center gap-3 cursor-pointer transition ${
+                          selectedChannel?.channel_id === channel.channel_id ? 'bg-red-50/60 border-l-4 border-l-red-500' : 'hover:bg-slate-50'
+                        }`}
+                      >
+                        <img 
+                          src={channel.profile_img_url || 'https://via.placeholder.com/150'} 
+                          alt={channel.name} 
+                          className="w-12 h-12 rounded-full border border-slate-200 object-cover flex-shrink-0"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <h4 className="text-sm font-bold text-slate-900 truncate">{channel.name}</h4>
+                          <p className="text-xs text-slate-400 truncate">{channel.handle}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-[11px] font-semibold text-slate-600">구독자 {(channel.follower_count / 10000).toFixed(1)}만</span>
+                            <span className="text-[11px] text-slate-400">• 평균조회 {(channel.avg_views / 10000).toFixed(1)}만</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
+              </div>
 
-                {/* 탭 네비게이션 */}
-                <div className="flex gap-2 border-b border-slate-200 pb-2">
-                  {[
-                    { id: 'content_split', label: '📊 쇼츠 vs 롱폼 분리 통계' },
-                    { id: 'channel', label: '채널 지표' },
-                    { id: 'video', label: '최근 영상 목록' },
-                    { id: 'ad_cost', label: '정밀 광고 단가 (PRO)' },
-                    { id: 'audience', label: '🌍 시청자 분석 (PRO)' }
-                  ].map((tab) => (
-                    <button
-                      key={tab.id}
-                      type="button"
-                      onClick={() => setActiveTab(tab.id as any)}
-                      className={`px-4 py-2 rounded-lg text-xs font-bold transition cursor-pointer ${
-                        activeTab === tab.id 
-                          ? 'bg-slate-900 text-white shadow-sm' 
-                          : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
-                      }`}
-                    >
-                      {tab.label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* [1] 쇼츠 vs 롱폼 분리 통계 */}
-                {activeTab === 'content_split' && (
-                  <div className="space-y-6">
-                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                      <div className="flex justify-between items-center mb-3">
-                        <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                          <PieChart size={18} className="text-red-500" /> 콘텐츠 유형 비중 (최근 {channelAnalytics.totalAnalyzed}개 기준)
-                        </h3>
-                        <div className="flex items-center gap-3 text-xs font-semibold">
-                          <span className="flex items-center gap-1 text-red-500">
-                            <span className="w-2.5 h-2.5 rounded-full bg-red-500"></span> 쇼츠 {channelAnalytics.shortsRatio}% ({channelAnalytics.shortsCount}개)
-                          </span>
-                          <span className="flex items-center gap-1 text-blue-600">
-                            <span className="w-2.5 h-2.5 rounded-full bg-blue-600"></span> 롱폼 {channelAnalytics.videoRatio}% ({channelAnalytics.videosCount}개)
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="w-full h-3.5 bg-slate-100 rounded-full overflow-hidden flex">
-                        <div 
-                          style={{ width: `${channelAnalytics.shortsRatio}%` }} 
-                          className="bg-red-500 transition-all duration-500"
-                        ></div>
-                        <div 
-                          style={{ width: `${channelAnalytics.videoRatio}%` }} 
-                          className="bg-blue-600 transition-all duration-500"
-                        ></div>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-5">
-                      <div className="bg-white p-6 rounded-2xl border-2 border-red-100 shadow-sm relative overflow-hidden">
-                        <div className="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-lg">
-                          SHORTS
-                        </div>
-                        <div className="flex items-center gap-2 text-red-500 text-sm font-bold mb-4">
-                          <Smartphone size={18} /> 숏폼(쇼츠) 성과
-                        </div>
-                        <div className="space-y-4">
-                          <div>
-                            <p className="text-xs text-slate-400 font-medium">평균 조회수</p>
-                            <p className="text-2xl font-black text-slate-900 mt-0.5">
-                              {channelAnalytics.avgShortsViews.toLocaleString()} <span className="text-sm font-normal text-slate-500">회</span>
-                            </p>
-                          </div>
-                          <div className="pt-3 border-t border-slate-100">
-                            <p className="text-xs text-slate-400 font-medium">수식 추정 숏폼 단가 (CPV 15원)</p>
-                            <p className="text-lg font-black text-red-600 mt-0.5">
-                              약 {(channelAnalytics.estShortsCpv / 10000).toFixed(1)} <span className="text-xs font-bold text-slate-600">만원</span>
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="bg-white p-6 rounded-2xl border-2 border-blue-100 shadow-sm relative overflow-hidden">
-                        <div className="absolute top-0 right-0 bg-blue-600 text-white text-[10px] font-bold px-3 py-1 rounded-bl-lg">
-                          LONG-FORM
-                        </div>
-                        <div className="flex items-center gap-2 text-blue-600 text-sm font-bold mb-4">
-                          <Video size={18} /> 일반(롱폼) 영상 성과
-                        </div>
-                        <div className="space-y-4">
-                          <div>
-                            <p className="text-xs text-slate-400 font-medium">평균 조회수</p>
-                            <p className="text-2xl font-black text-slate-900 mt-0.5">
-                              {channelAnalytics.avgVideoViews.toLocaleString()} <span className="text-sm font-normal text-slate-500">회</span>
-                            </p>
-                          </div>
-                          <div className="pt-3 border-t border-slate-100">
-                            <p className="text-xs text-slate-400 font-medium">수식 추정 롱폼 단가 (CPV 35원)</p>
-                            <p className="text-lg font-black text-blue-600 mt-0.5">
-                              약 {(channelAnalytics.estVideoCpv / 10000).toFixed(1)} <span className="text-xs font-bold text-slate-600">만원</span>
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-5">
-                      <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
-                        <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
-                          <TrendingUp size={24} />
-                        </div>
+              {/* 우측 유튜브 대시보드 */}
+              <div className="flex-1 overflow-y-auto p-8 bg-[#f8f9fa]">
+                {selectedChannel ? (
+                  <div className="max-w-4xl mx-auto space-y-6">
+                    {/* 상단 프로필 카드 */}
+                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-start justify-between">
+                      <div className="flex gap-4">
+                        <img 
+                          src={selectedChannel.profile_img_url || 'https://via.placeholder.com/150'} 
+                          alt={selectedChannel.name} 
+                          className="w-16 h-16 rounded-full border border-slate-200 object-cover"
+                        />
                         <div>
-                          <p className="text-xs text-slate-400 font-medium">진성 반응률 (Engagement)</p>
-                          <p className="text-xl font-black text-emerald-600 mt-0.5">
-                            {channelAnalytics.engagementRate}%
-                          </p>
-                          <p className="text-[11px] text-slate-400 mt-0.5">조회수 대비 댓글·좋아요 상호작용</p>
+                          <div className="flex items-center gap-2">
+                            <h2 className="text-xl font-bold text-slate-900">{selectedChannel.name}</h2>
+                            <span className="text-xs px-2 py-0.5 bg-slate-100 text-slate-600 rounded font-medium">{selectedChannel.primary_language?.toUpperCase() || 'KO'}</span>
+                          </div>
+                          <p className="text-sm text-slate-400 mt-0.5">{selectedChannel.handle}</p>
+                          <div className="flex flex-wrap gap-1.5 mt-3">
+                            {(selectedChannel.tags || []).map((t, idx) => (
+                              <span key={idx} className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-medium">#{t}</span>
+                            ))}
+                          </div>
                         </div>
                       </div>
-
-                      <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
-                        <div className="p-3 bg-purple-50 text-purple-600 rounded-xl">
-                          <CheckCircle2 size={24} />
-                        </div>
-                        <div>
-                          <p className="text-xs text-slate-400 font-medium">유료 광고/협찬 집행 비중</p>
-                          <p className="text-xl font-black text-purple-600 mt-0.5">
-                            {channelAnalytics.sponsoredRatio}% <span className="text-xs font-normal text-slate-500">({channelAnalytics.sponsoredCount}건 감지)</span>
-                          </p>
-                          <p className="text-[11px] text-slate-400 mt-0.5">설명란 유료광고 키워드 기반 판별</p>
-                        </div>
-                      </div>
+                      <button 
+                        type="button"
+                        onClick={() => alert(`문의 이메일: ${selectedChannel.contact_email || '등록된 이메일이 없습니다.'}`)}
+                        className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 border border-slate-200 rounded-lg hover:bg-slate-50 transition cursor-pointer"
+                      >
+                        <Mail size={14} /> 문의하기
+                      </button>
                     </div>
-                  </div>
-                )}
 
-                {/* [2] 채널 기본 지표 */}
-                {activeTab === 'channel' && (
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                      <p className="text-xs font-medium text-slate-400 mb-1">총 구독자 수</p>
-                      <p className="text-2xl font-extrabold text-slate-900">{(selectedChannel.follower_count || 0).toLocaleString()}명</p>
-                    </div>
-                    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                      <p className="text-xs font-medium text-slate-400 mb-1">총 영상 수</p>
-                      <p className="text-2xl font-extrabold text-slate-900">{(selectedChannel.total_video_count || 0).toLocaleString()}개</p>
-                    </div>
-                    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                      <p className="text-xs font-medium text-slate-400 mb-1">평균 조회수</p>
-                      <p className="text-2xl font-extrabold text-slate-900">{(selectedChannel.avg_views || 0).toLocaleString()}회</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* [3] 최근 영상 목록: [전체/롱폼/숏폼] 필터 + PRO 조회수 잠금 */}
-                {activeTab === 'video' && (
-                  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                    <div className="flex items-center justify-between mb-5 pb-3 border-b border-slate-100">
-                      <div className="flex items-center gap-2">
-                        <PlayCircle size={18} className="text-red-500" />
-                        <h3 className="text-sm font-bold text-slate-800">수집된 영상 목록</h3>
-                        <span className="text-xs text-slate-400 font-normal">
-                          ({filteredPosts.length}개)
-                        </span>
-                      </div>
-
-                      <div className="flex bg-slate-100 p-1 rounded-lg gap-1">
+                    {/* 탭 네비게이션 */}
+                    <div className="flex gap-2 border-b border-slate-200 pb-2">
+                      {[
+                        { id: 'content_split', label: '📊 쇼츠 vs 롱폼 분리 통계' },
+                        { id: 'channel', label: '채널 지표' },
+                        { id: 'video', label: '최근 영상 목록' }
+                      ].map((tab) => (
                         <button
+                          key={tab.id}
                           type="button"
-                          onClick={() => setVideoTypeFilter('ALL')}
-                          className={`px-3 py-1 text-xs font-bold rounded-md transition cursor-pointer ${
-                            videoTypeFilter === 'ALL'
-                              ? 'bg-white text-slate-900 shadow-sm'
-                              : 'text-slate-500 hover:text-slate-800'
+                          onClick={() => setYtTab(tab.id as any)}
+                          className={`px-4 py-2 rounded-lg text-xs font-bold transition cursor-pointer ${
+                            ytTab === tab.id ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
                           }`}
                         >
-                          전체
+                          {tab.label}
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => setVideoTypeFilter('VIDEO')}
-                          className={`px-3 py-1 text-xs font-bold rounded-md transition cursor-pointer ${
-                            videoTypeFilter === 'VIDEO'
-                              ? 'bg-white text-blue-600 shadow-sm'
-                              : 'text-slate-500 hover:text-slate-800'
-                          }`}
-                        >
-                          롱폼
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setVideoTypeFilter('SHORTS')}
-                          className={`px-3 py-1 text-xs font-bold rounded-md transition cursor-pointer ${
-                            videoTypeFilter === 'SHORTS'
-                              ? 'bg-white text-red-600 shadow-sm'
-                              : 'text-slate-500 hover:text-slate-800'
-                          }`}
-                        >
-                          숏폼
-                        </button>
-                      </div>
+                      ))}
                     </div>
 
-                    {loadingPosts ? (
-                      <p className="text-xs text-slate-400 py-6 text-center">영상 데이터를 불러오는 중...</p>
-                    ) : filteredPosts.length === 0 ? (
-                      <p className="text-xs text-slate-400 py-6 text-center">해당 분류의 영상 데이터가 없습니다.</p>
-                    ) : (
-                      <div className="grid grid-cols-3 gap-4">
-                        {filteredPosts.map((post, idx) => (
-                          <div
-                            key={idx}
-                            className="group block rounded-xl overflow-hidden border border-slate-200 hover:shadow-md transition bg-slate-50 flex flex-col justify-between"
-                          >
-                            <div>
-                              <div className="relative aspect-video overflow-hidden bg-slate-200">
-                                <img 
-                                  src={post.thumbnail_url} 
-                                  alt={post.title} 
-                                  className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                                />
-                                {(post.content_type === 'SHORTS' || (post.post_url && post.post_url.includes('/shorts/'))) && (
-                                  <span className="absolute top-2 left-2 bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">
-                                    SHORTS
-                                  </span>
-                                )}
-                              </div>
-                              <div className="p-3">
-                                <h4 className="text-xs font-medium text-slate-800 line-clamp-2 leading-relaxed">
-                                  {post.title}
-                                </h4>
-                              </div>
-                            </div>
-
-                            {/* 조회수 PRO 잠금/해금 영역 */}
-                            <div className="px-3 pb-3 pt-1 border-t border-slate-100 flex items-center justify-between text-[11px]">
-                              {isProUser ? (
-                                <span className="text-slate-600 font-semibold">
-                                  조회수 {(post.view_count || 0).toLocaleString()}회
-                                </span>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => setIsProUser(true)}
-                                  className="flex items-center gap-1 text-amber-600 hover:text-amber-700 font-bold bg-amber-50 px-2 py-0.5 rounded transition cursor-pointer"
-                                  title="클릭 시 PRO 모드 활성화"
-                                >
-                                  <Lock size={11} /> PRO 결제 후 조회수 보기
-                                </button>
-                              )}
-
-                              <a 
-                                href={post.post_url} 
-                                target="_blank" 
-                                rel="noreferrer"
-                                className="text-slate-400 hover:text-red-500 transition p-1"
-                              >
-                                <ExternalLink size={13} />
-                              </a>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* [4] PRO 정밀 광고 단가 탭 */}
-                {activeTab === 'ad_cost' && (
-                  <div>
-                    {!isProUser ? (
-                      <div className="relative overflow-hidden bg-white p-8 rounded-2xl border border-slate-200 shadow-sm text-center">
-                        <div className="filter blur-sm select-none pointer-events-none space-y-4">
-                          <div className="h-8 bg-slate-200 rounded w-1/3 mx-auto"></div>
-                          <div className="h-20 bg-slate-100 rounded w-full"></div>
-                        </div>
-                        <div className="absolute inset-0 bg-white/80 flex flex-col items-center justify-center p-6">
-                          <div className="p-3 bg-red-100 text-red-500 rounded-full mb-3">
-                            <Lock size={24} />
-                          </div>
-                          <h3 className="text-base font-bold text-slate-900 mb-1">PRO 전용 정밀 광고 견적 지표입니다</h3>
-                          <p className="text-xs text-slate-500 mb-4 max-w-sm">
-                            예상 제작 단가 및 패키지 견적서를 확인하려면 PRO 모드를 활성화하세요.
-                          </p>
-                          <button 
-                            type="button"
-                            onClick={() => setIsProUser(true)}
-                            className="px-5 py-2.5 bg-red-500 text-white rounded-lg text-xs font-bold hover:bg-red-600 shadow-md transition cursor-pointer"
-                          >
-                            PRO 결제하고 즉시 해금하기
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="bg-white p-6 rounded-2xl border border-amber-200 shadow-sm space-y-4">
-                        <div className="flex items-center gap-2 text-xs font-bold text-amber-600 uppercase tracking-wider">
-                          👑 PRO 모드 해금 데이터
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="p-4 bg-amber-50/50 border border-amber-100 rounded-xl">
-                            <p className="text-xs text-slate-500 mb-1">정밀 롱폼 패키지 단가</p>
-                            <p className="text-xl font-black text-slate-900">
-                              약 {((selectedChannel.estimated_video_cpv_price || channelAnalytics.estVideoCpv) / 10000).toFixed(1)}만원
-                            </p>
-                          </div>
-                          <div className="p-4 bg-amber-50/50 border border-amber-100 rounded-xl">
-                            <p className="text-xs text-slate-500 mb-1">정밀 숏폼 패키지 단가</p>
-                            <p className="text-xl font-black text-slate-900">
-                              약 {((selectedChannel.estimated_shorts_cpv_price || channelAnalytics.estShortsCpv) / 10000).toFixed(1)}만원
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* [5] PRO 시청자 분석 탭 */}
-                {activeTab === 'audience' && (
-                  <div>
-                    {!isProUser ? (
-                      <div className="relative overflow-hidden bg-white p-12 rounded-2xl border border-slate-200 shadow-sm text-center">
-                        <div className="filter blur-sm select-none pointer-events-none space-y-4">
-                          <div className="h-10 bg-slate-200 rounded w-1/3 mx-auto"></div>
-                          <div className="h-32 bg-slate-100 rounded w-full"></div>
-                        </div>
-                        <div className="absolute inset-0 bg-white/85 flex flex-col items-center justify-center p-6">
-                          <div className="p-3 bg-amber-100 text-amber-600 rounded-full mb-3 shadow-inner">
-                            <Globe2 size={28} />
-                          </div>
-                          <h3 className="text-base font-bold text-slate-900 mb-1">시청자 국가·성별 정밀 분석 데이터</h3>
-                          <p className="text-xs text-slate-500 mb-4 max-w-sm leading-relaxed">
-                            채널 시청자의 국적 분포 원형 차트와 성별·연령대 인구통계를 확인하려면 PRO 멤버십이 필요합니다.
-                          </p>
-                          <button 
-                            type="button"
-                            onClick={() => setIsProUser(true)}
-                            className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-yellow-500 text-white rounded-lg text-xs font-bold hover:brightness-105 shadow-md transition cursor-pointer"
-                          >
-                            👑 PRO 결제하고 즉시 해금하기
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
+                    {ytTab === 'content_split' && (
                       <div className="space-y-6">
-                        <div className="bg-white p-7 rounded-2xl border border-slate-200 shadow-sm">
-                          <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-6">
-                            <div className="flex items-center gap-2">
-                              <Globe2 className="text-red-500" size={20} />
-                              <h3 className="text-sm font-bold text-slate-900">시청자 국적 및 타겟 언어 분포</h3>
+                        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                          <div className="flex justify-between items-center mb-3">
+                            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                              <PieChart size={18} className="text-red-500" /> 콘텐츠 유형 비중 (최근 {channelAnalytics.totalAnalyzed}개 기준)
+                            </h3>
+                            <div className="flex items-center gap-3 text-xs font-semibold">
+                              <span className="flex items-center gap-1 text-red-500">쇼츠 {channelAnalytics.shortsRatio}% ({channelAnalytics.shortsCount}개)</span>
+                              <span className="flex items-center gap-1 text-blue-600">롱폼 {channelAnalytics.videoRatio}% ({channelAnalytics.videosCount}개)</span>
                             </div>
-                            <span className="text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full flex items-center gap-1">
-                              <ShieldCheck size={13} /> 공인 데이터 검증 완료
-                            </span>
                           </div>
-
-                          <div className="grid grid-cols-12 gap-8 items-center">
-                            <div className="col-span-5 flex flex-col items-center justify-center relative">
-                              <div className="relative w-44 h-44">
-                                <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90 transform">
-                                  <circle
-                                    cx="50"
-                                    cy="50"
-                                    r="40"
-                                    fill="transparent"
-                                    stroke="#f1f5f9"
-                                    strokeWidth="12"
-                                  />
-                                  {audienceStats.chartSlices.map((slice, i) => (
-                                    <circle
-                                      key={i}
-                                      cx="50"
-                                      cy="50"
-                                      r="40"
-                                      fill="transparent"
-                                      stroke={slice.color}
-                                      strokeWidth="12"
-                                      strokeDasharray={slice.strokeDasharray}
-                                      strokeDashoffset={slice.strokeDashoffset}
-                                      className="transition-all duration-700 ease-out"
-                                    />
-                                  ))}
-                                </svg>
-                                <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                                  <span className="text-2xl">{audienceStats.items[0]?.flag || '🇰🇷'}</span>
-                                  <span className="text-xs font-extrabold text-slate-800 mt-1">
-                                    {audienceStats.items[0]?.name || '대한민국'}
-                                  </span>
-                                  <span className="text-[11px] font-bold text-slate-400">
-                                    {audienceStats.items[0]?.percent || 100}%
-                                  </span>
-                                </div>
-                              </div>
-                              <p className="text-[11px] text-slate-400 mt-3 font-medium">주 타겟 국가 중심 분포</p>
-                            </div>
-
-                            <div className="col-span-7 space-y-4">
-                              {audienceStats.items.map((item, idx) => (
-                                <div key={idx} className="space-y-1.5">
-                                  <div className="flex items-center justify-between text-xs">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-base">{item.flag}</span>
-                                      <span className="font-bold text-slate-800">{item.name}</span>
-                                      <span className="text-[10px] text-slate-400 uppercase font-mono">({item.key})</span>
-                                    </div>
-                                    <span className="font-extrabold text-slate-900">{item.percent}%</span>
-                                  </div>
-                                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                                    <div 
-                                      style={{ width: `${item.percent}%`, backgroundColor: item.color }} 
-                                      className="h-full rounded-full transition-all duration-500"
-                                    ></div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
+                          <div className="w-full h-3.5 bg-slate-100 rounded-full overflow-hidden flex">
+                            <div style={{ width: `${channelAnalytics.shortsRatio}%` }} className="bg-red-500"></div>
+                            <div style={{ width: `${channelAnalytics.videoRatio}%` }} className="bg-blue-600"></div>
                           </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-5">
-                          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                            <h4 className="text-xs font-bold text-slate-700 flex items-center gap-1.5 mb-4">
-                              <UserCheck size={16} className="text-blue-500" /> 시청자 성별 비율 (추정)
-                            </h4>
-                            <div className="space-y-3">
-                              <div className="flex justify-between items-center text-xs font-bold">
-                                <span className="text-blue-600 flex items-center gap-1">남성 42%</span>
-                                <span className="text-pink-500 flex items-center gap-1">여성 58%</span>
-                              </div>
-                              <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden flex">
-                                <div style={{ width: '42%' }} className="bg-blue-500"></div>
-                                <div style={{ width: '58%' }} className="bg-pink-500"></div>
-                              </div>
-                              <p className="text-[11px] text-slate-400">카테고리 및 댓글 반응 인구통계 가중치 적용</p>
+                          <div className="bg-white p-6 rounded-2xl border-2 border-red-100 shadow-sm">
+                            <div className="flex items-center gap-2 text-red-500 text-sm font-bold mb-4">
+                              <Smartphone size={18} /> 숏폼(쇼츠) 성과
                             </div>
+                            <p className="text-xs text-slate-400 font-medium">평균 조회수</p>
+                            <p className="text-2xl font-black text-slate-900 mt-0.5">{channelAnalytics.avgShortsViews.toLocaleString()}회</p>
                           </div>
-
-                          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                            <h4 className="text-xs font-bold text-slate-700 mb-3 flex items-center gap-1.5">
-                              <TrendingUp size={16} className="text-amber-500" /> 주 소비 연령층
-                            </h4>
-                            <div className="flex items-center gap-3">
-                              <div className="p-3 bg-amber-50 rounded-xl text-center flex-1">
-                                <p className="text-[11px] text-slate-400 font-medium">1순위 타겟</p>
-                                <p className="text-base font-black text-slate-900 mt-0.5">25-34세 (48%)</p>
-                              </div>
-                              <div className="p-3 bg-slate-50 rounded-xl text-center flex-1">
-                                <p className="text-[11px] text-slate-400 font-medium">2순위 타겟</p>
-                                <p className="text-base font-black text-slate-900 mt-0.5">18-24세 (31%)</p>
-                              </div>
+                          <div className="bg-white p-6 rounded-2xl border-2 border-blue-100 shadow-sm">
+                            <div className="flex items-center gap-2 text-blue-600 text-sm font-bold mb-4">
+                              <Video size={18} /> 일반(롱폼) 영상 성과
                             </div>
+                            <p className="text-xs text-slate-400 font-medium">평균 조회수</p>
+                            <p className="text-2xl font-black text-slate-900 mt-0.5">{channelAnalytics.avgVideoViews.toLocaleString()}회</p>
                           </div>
                         </div>
                       </div>
                     )}
+
+                    {ytTab === 'video' && (
+                      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                        <div className="grid grid-cols-3 gap-4">
+                          {posts.map((post, idx) => (
+                            <div key={idx} className="rounded-xl overflow-hidden border border-slate-200 bg-slate-50 flex flex-col justify-between">
+                              <div className="relative aspect-video bg-slate-200">
+                                <img src={post.thumbnail_url} alt={post.title} className="w-full h-full object-cover" />
+                              </div>
+                              <div className="p-3">
+                                <h4 className="text-xs font-medium text-slate-800 line-clamp-2">{post.title}</h4>
+                                <p className="text-[11px] text-slate-500 mt-2 font-semibold">조회수 {(post.view_count || 0).toLocaleString()}회</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-sm text-slate-400">선택된 인플루언서가 없습니다.</div>
                 )}
               </div>
-            ) : (
-              <div className="h-full flex items-center justify-center text-sm text-slate-400">
-                선택된 인플루언서가 없습니다.
+            </>
+          )}
+
+          {/* =======================
+              블로그 본문 레이아웃 (요청 사항 100% 반영)
+          ======================= */}
+          {platformMode === 'blog' && (
+            <>
+              {/* 블로거 목록 */}
+              <div className="w-1/3 border-r border-slate-200 overflow-y-auto bg-white flex flex-col justify-between">
+                <div>
+                  <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 sticky top-0 z-10">
+                    <span className="text-xs font-bold text-slate-500">
+                      블로그 인플루언서 ({filteredBloggers.length}명 {isProUser ? '전체' : '샘플'})
+                    </span>
+                  </div>
+
+                  {loading ? (
+                    <div className="p-8 text-center text-sm text-slate-400">데이터를 불러오는 중...</div>
+                  ) : filteredBloggers.length === 0 ? (
+                    <div className="p-8 text-center text-sm text-slate-400">일치하는 블로그 인플루언서가 없습니다.</div>
+                  ) : (
+                    filteredBloggers.map((blogger) => (
+                      <div 
+                        key={blogger.blog_id}
+                        onClick={() => handleSelectBlogger(blogger)}
+                        className={`p-4 border-b border-slate-100 flex items-center gap-3 cursor-pointer transition ${
+                          selectedBlogger?.blog_id === blogger.blog_id ? 'bg-green-50/70 border-l-4 border-l-green-600' : 'hover:bg-slate-50'
+                        }`}
+                      >
+                        <img 
+                          src={blogger.profile_img_url || 'https://via.placeholder.com/150'} 
+                          alt={blogger.name} 
+                          className="w-12 h-12 rounded-full border border-slate-200 object-cover flex-shrink-0"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <h4 className="text-sm font-bold text-slate-900 truncate">{blogger.name}</h4>
+                            <span className="text-[9px] px-1.5 py-0.2 bg-green-100 text-green-700 font-bold rounded">INFLUENCER</span>
+                          </div>
+                          <p className="text-xs text-slate-400 truncate">@{blogger.handle || blogger.blog_id}</p>
+                          <div className="flex items-center gap-2 mt-1 text-[11px]">
+                            <span className="font-semibold text-slate-700">팬 {(blogger.fan_count || 0).toLocaleString()}명</span>
+                            <span className="text-slate-400">• 일방문 {(blogger.daily_visitors || 0).toLocaleString()}명</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
-            )}
-          </div>
+
+              {/* 우측 블로그 대시보드 */}
+              <div className="flex-1 overflow-y-auto p-8 bg-[#f8f9fa]">
+                {selectedBlogger ? (
+                  <div className="max-w-4xl mx-auto space-y-6">
+                    {/* 상단 블로거 프로필 카드 */}
+                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-start justify-between">
+                      <div className="flex gap-4">
+                        <img 
+                          src={selectedBlogger.profile_img_url || 'https://via.placeholder.com/150'} 
+                          alt={selectedBlogger.name} 
+                          className="w-16 h-16 rounded-full border border-slate-200 object-cover"
+                        />
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h2 className="text-xl font-bold text-slate-900">{selectedBlogger.name}</h2>
+                            <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded font-bold">네이버 공식 인플루언서</span>
+                          </div>
+                          <p className="text-sm text-slate-400 mt-0.5">@{selectedBlogger.handle || selectedBlogger.blog_id}</p>
+                          <div className="flex flex-wrap gap-1.5 mt-3">
+                            {(selectedBlogger.tags || []).map((t, idx) => (
+                              <span key={idx} className="text-xs bg-slate-100 text-slate-600 px-2.5 py-0.5 rounded-full font-medium">#{t}</span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 문의하기 버튼 (인플루언서 링크 새창 이동) */}
+                      <a 
+                        href={selectedBlogger.contact_url || selectedBlogger.profile_url || `https://blog.naver.com/${selectedBlogger.blog_id}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-1.5 text-xs font-semibold px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition shadow-sm cursor-pointer"
+                      >
+                        <Mail size={14} /> 문의하기
+                      </a>
+                    </div>
+
+                    {/* 블로그 4대 지표 카드 */}
+                    <div className="grid grid-cols-4 gap-4">
+                      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                        <p className="text-xs font-medium text-slate-400 mb-1">인플루언서 팬 수</p>
+                        <p className="text-xl font-extrabold text-slate-900">{(selectedBlogger.fan_count || 0).toLocaleString()}명</p>
+                      </div>
+                      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                        <p className="text-xs font-medium text-slate-400 mb-1">일일 평균 방문자</p>
+                        <p className="text-xl font-extrabold text-green-600">{(selectedBlogger.daily_visitors || 0).toLocaleString()}명</p>
+                      </div>
+                      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                        <p className="text-xs font-medium text-slate-400 mb-1">이웃(팔로워) 수</p>
+                        <p className="text-xl font-extrabold text-slate-900">{(selectedBlogger.follower_count || 0).toLocaleString()}명</p>
+                      </div>
+                      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                        <p className="text-xs font-medium text-slate-400 mb-1">평균 공감 / 댓글</p>
+                        <p className="text-xl font-extrabold text-slate-900">
+                          {(selectedBlogger.avg_likes || 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">/ {(selectedBlogger.avg_comments || 0).toLocaleString()}</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* 최신 블로그 포스트 카드 (좌측 대표 사진 + 우측 제목, 요약, 날짜, 공감/댓글) */}
+                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                      <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+                        <div className="flex items-center gap-2">
+                          <span className="text-green-600 text-lg">📝</span>
+                          <h3 className="text-sm font-bold text-slate-800">최근 발행 콘텐츠</h3>
+                          <span className="text-xs text-slate-400 font-normal">({blogPosts.length}개 포스트)</span>
+                        </div>
+                        <a 
+                          href={selectedBlogger.profile_url || `https://blog.naver.com/${selectedBlogger.blog_id}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs text-slate-400 hover:text-green-600 flex items-center gap-1 font-medium"
+                        >
+                          블로그 홈 바로가기 <ExternalLink size={12} />
+                        </a>
+                      </div>
+
+                      {loadingBlogPosts ? (
+                        <p className="text-xs text-slate-400 py-8 text-center">블로그 포스트를 불러오는 중입니다...</p>
+                      ) : blogPosts.length === 0 ? (
+                        <p className="text-xs text-slate-400 py-8 text-center">등록된 최신 포스트 데이터가 없습니다.</p>
+                      ) : (
+                        <div className="space-y-4">
+                          {blogPosts.map((post) => (
+                            <a
+                              key={post.post_id}
+                              href={post.post_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="group flex gap-4 p-3 rounded-xl border border-slate-100 hover:border-slate-200 hover:shadow-md transition bg-slate-50/50"
+                            >
+                              <div className="w-40 h-28 flex-shrink-0 rounded-lg overflow-hidden bg-slate-200 relative">
+                                <img 
+                                  src={post.thumbnail_url || 'https://via.placeholder.com/300x200?text=No+Image'} 
+                                  alt={post.title} 
+                                  className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                                />
+                              </div>
+
+                              <div className="flex-1 flex flex-col justify-between py-0.5 min-w-0">
+                                <div>
+                                  <h4 className="text-sm font-bold text-slate-900 group-hover:text-green-600 transition truncate">
+                                    {post.title}
+                                  </h4>
+                                  <p className="text-xs text-slate-500 mt-1.5 line-clamp-2 leading-relaxed">
+                                    {post.summary || '내용 미리보기가 제공되지 않는 포스트입니다.'}
+                                  </p>
+                                </div>
+
+                                <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-100/80">
+                                  <span className="flex items-center gap-1">
+                                    <Calendar size={12} /> {post.published_at || '최근 작성'}
+                                  </span>
+                                  <div className="flex items-center gap-3">
+                                    <span className="flex items-center gap-1 text-rose-500 font-medium">
+                                      <Heart size={12} /> 공감 {(post.like_count || 0).toLocaleString()}
+                                    </span>
+                                    <span className="flex items-center gap-1 text-slate-600 font-medium">
+                                      <MessageSquare size={12} /> 댓글 {(post.comment_count || 0).toLocaleString()}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-sm text-slate-400">선택된 블로그 인플루언서가 없습니다.</div>
+                )}
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
