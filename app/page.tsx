@@ -321,36 +321,74 @@ const matchesSearch = !rawQ || (() => {
     minComments, maxComments, blogSort, isProUser
   ]);
 
-  // 마케팅 시각화 지표 연산 (협찬/광고 관련 항목 완전 제거)
-  const blogAnalytics = useMemo(() => {
-    if (!selectedBlogger) return null;
-    const dailyV = selectedBlogger.daily_visitors || 0;
-    const fans = selectedBlogger.fan_count || 0;
-    const likes = selectedBlogger.avg_likes ?? selectedBlogger.recent_10_avg_likes ?? 0;
-    const comments = selectedBlogger.avg_comments ?? selectedBlogger.recent_10_avg_comments ?? 0;
-    
-    // 1) 예상 원고료
-    const basePrice = Math.max(50000, Math.round((dailyV * 25 + fans * 30) / 10000) * 10000);
-    const estPrice = selectedBlogger.estimated_post_price || basePrice;
+// ★ 카테고리별 가치 세분화 단가 산출 로직
+    const totalInteractions = likes + comments; // 최근 포스트 평균 공감 + 댓글 수
+    const tagsArr = selectedBlogger.tags || [];
 
-    // 2) 참여율 (Engagement Rate)
-    const engRate = selectedBlogger.engagement_rate ?? 
-      (dailyV > 0 ? Number((((likes + comments) / dailyV) * 100).toFixed(2)) : 4.5);
+    // 1. 카테고리 매칭 판별
+    // [그룹 1: 초고단가 프리미엄군] - 10만 ~ 40만 원
+    const isTier1 = tagsArr.some(t => 
+      ['여행', 'IT테크', '자동차', '경제', '비즈니스', '어학', '교육', '테크'].some(k => t.includes(k))
+    );
 
-    // 3) 종합 협업 지수 스코어 (100점 만점)
-    let score = 75;
-    if (engRate > 5.0) score += 15;
-    else if (engRate > 3.0) score += 8;
-    if (dailyV > 10000) score += 8;
-    score = Math.min(99, Math.max(60, score));
+    // [그룹 2: 고단가 타깃/전환소비군] - 10만 ~ 30만 원
+    const isTier2 = tagsArr.some(t => 
+      ['뷰티', '패션', '육아', '게임', '생활건강', '리빙'].some(k => t.includes(k))
+    );
 
-    // 4) 포스트별 인터랙션(공감+댓글) 트렌드 데이터 (최근 10개)
-    const recentBarData = (blogPosts.slice(0, 10)).map((p, idx) => ({
-      index: idx + 1,
-      likes: p.like_count || 0,
-      comments: p.comment_count || 0,
-      total: (p.like_count || 0) + (p.comment_count || 0),
-    }));
+    // [그룹 3: 볼륨 & 체험단군] - 8만 ~ 20만 원
+    const isFood = tagsArr.some(t => 
+      ['푸드', '맛집', '식음료', '카페'].some(k => t.includes(k))
+    );
+
+    // 2. 카테고리별 베이스 단가 및 한도 세팅
+    let basePrice = 70000;
+    let minCap = 80000;
+    let maxCap = 250000;
+    let interactionWeight = 150; // 공감/댓글 1개당 가치
+
+    if (isTier1) {
+      // 여행 / IT테크 / 자동차 / 경제비즈니스 / 어학교육 (10만 ~ 40만)
+      basePrice = 110000;
+      minCap = 100000;
+      maxCap = 400000;
+      interactionWeight = 180;
+    } else if (isTier2) {
+      // 뷰티 / 패션 / 육아 / 게임 / 건강 (10만 ~ 30만)
+      basePrice = 90000;
+      minCap = 100000;
+      maxCap = 300000;
+      interactionWeight = 160;
+    } else if (isFood) {
+      // 맛집 / 푸드 (8만 ~ 20만)
+      basePrice = 60000;
+      minCap = 80000;
+      maxCap = 200000;
+      interactionWeight = 120;
+    }
+
+    let calculated = basePrice;
+
+    // 3. 독자 인터랙션(공감+댓글) 가산 (가장 핵심 가치)
+    calculated += Math.min(totalInteractions * interactionWeight, 180000);
+
+    // 4. 진성 참여율(Engagement Rate) 프리미엄
+    if (engRate >= 6.0) {
+      calculated += 50000; // 최상위 팬덤
+    } else if (engRate >= 3.5) {
+      calculated += 30000;
+    } else if (engRate >= 2.0) {
+      calculated += 15000;
+    }
+
+    // 5. 일일 방문자 보조 가산 (1,000명당 약 4,000원)
+    calculated += Math.min(dailyV * 4, 60000);
+
+    // 6. 카테고리별 캡 적용
+    calculated = Math.max(minCap, Math.min(maxCap, calculated));
+
+    // 1만 원 단위 반올림
+    const estPrice = Math.round(calculated / 10000) * 10000;
 
     const maxBarValue = Math.max(...recentBarData.map(d => d.total), 100);
 
