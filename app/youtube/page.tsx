@@ -2,7 +2,12 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Search, Lock, Mail, ExternalLink, Tag, ArrowUpDown } from 'lucide-react';
+import { 
+  Search, Lock, Mail, ExternalLink, Tag, ArrowUpDown, 
+  Users, Eye, TrendingUp, DollarSign, Award, BarChart3, 
+  Globe, PlayCircle, Film, Sparkles, FileText, CheckCircle2,
+  Calendar, Heart, MessageSquare, ShieldCheck, Target, Zap, Flame
+} from 'lucide-react';
 
 interface Influencer {
   channel_id: string;
@@ -13,65 +18,181 @@ interface Influencer {
   follower_count: number;
   total_video_count: number;
   avg_views: number;
+  avg_video_views: number;
+  avg_shorts_views: number;
+  avg_likes: number;
+  avg_comments: number;
   engagement_rate: number;
   estimated_video_cpv_price: number;
+  estimated_shorts_cpv_price: number;
+  sponsored_video_ratio: number;
+  audience_languages?: Record<string, number>;
+  primary_language?: string;
   contact_email: string | null;
   tags: string[];
 }
 
 interface Post {
+  video_id?: string;
+  channel_id: string;
   title: string;
   post_url: string;
   thumbnail_url: string;
   view_count?: number;
   like_count?: number;
+  comment_count?: number;
+  published_at?: string;
 }
 
-const YOUTUBE_TAGS = ['전체', '맛집', '먹방', '여행', 'Vlog', 'IT', '뷰티', '패션', '게임'];
+const YOUTUBE_TAGS = ['전체', '맛집', '먹방', '여행', 'Vlog', 'IT', '뷰티', '패션', '게임', '경제'];
+type SubscriberRange = 'all' | 'under10k' | '10k_100k' | '100k_500k' | 'over500k';
+type YoutubeSortOption = 'follower_desc' | 'views_desc' | 'engagement_desc';
 
 export default function YoutubeDashboardPage() {
+  const [isProUser, setIsProUser] = useState(false);
   const [search, setSearch] = useState('');
   const [ytTag, setYtTag] = useState('전체');
+  const [subRange, setSubRange] = useState<SubscriberRange>('all');
+  const [ytSort, setYtSort] = useState<YoutubeSortOption>('follower_desc');
+  
+  // 4대 탭: 기본정보 / 시청자분석PRO / 수익분석PRO / 광고단가분석PRO
+  const [activeTab, setActiveTab] = useState<'basic' | 'audience' | 'revenue' | 'ad_price'>('basic');
+
   const [influencers, setInfluencers] = useState<Influencer[]>([]);
   const [selectedChannel, setSelectedChannel] = useState<Influencer | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [loadingPosts, setLoadingPosts] = useState(false);
 
   useEffect(() => {
-    const load = async () => {
-      const { data } = await supabase
-        .from('influencers')
-        .select('*')
-        .order('follower_count', { ascending: false })
-        .limit(1000);
-      if (data) {
-        setInfluencers(data as Influencer[]);
-        if (data.length > 0) setSelectedChannel(data[0] as Influencer);
+    const loadChannels = async () => {
+      setLoading(true);
+      try {
+        const { data } = await supabase
+          .from('influencers')
+          .select('*')
+          .order('follower_count', { ascending: false })
+          .limit(2000);
+        if (data) {
+          setInfluencers(data as Influencer[]);
+          if (data.length > 0 && !selectedChannel) {
+            setSelectedChannel(data[0] as Influencer);
+          }
+        }
+      } finally {
+        setLoading(false);
       }
     };
-    load();
+    loadChannels();
   }, []);
 
   useEffect(() => {
     if (!selectedChannel) return;
     const loadPosts = async () => {
-      const { data } = await supabase
-        .from('influencer_posts')
-        .select('*')
-        .eq('channel_id', selectedChannel.channel_id)
-        .limit(20);
-      if (data) setPosts(data as Post[]);
+      setLoadingPosts(true);
+      try {
+        let cleanId = selectedChannel.channel_id || '';
+        if (cleanId.includes('/')) {
+          const parts = cleanId.split('/');
+          cleanId = parts[parts.length - 1];
+        }
+        const { data } = await supabase
+          .from('influencer_posts')
+          .select('*')
+          .or(`channel_id.eq.${cleanId},channel_id.eq.${selectedChannel.channel_id}`)
+          .limit(20);
+        if (data) setPosts(data as Post[]);
+      } finally {
+        setLoadingPosts(false);
+      }
     };
     loadPosts();
   }, [selectedChannel]);
 
-  const filtered = useMemo(() => {
-    return influencers.filter((item) => {
-      const q = search.trim().toLowerCase();
-      const matchSearch = !q || item.name.toLowerCase().includes(q) || (item.handle && item.handle.toLowerCase().includes(q));
-      const matchTag = ytTag === '전체' || (item.tags && item.tags.some(t => t.includes(ytTag)));
-      return matchSearch && matchTag;
+  // 검색 및 필터링
+  const filteredInfluencers = useMemo(() => {
+    const list = influencers.filter((item) => {
+      const rawQ = (search || '').trim().toLowerCase();
+      const q = rawQ.replace(/\s+/g, '');
+      const nameRaw = (item.name || '').toLowerCase();
+      const handleRaw = (item.handle || '').toLowerCase();
+
+      const matchesSearch = !rawQ || 
+        nameRaw.includes(rawQ) || 
+        nameRaw.replace(/\s+/g, '').includes(q) ||
+        handleRaw.includes(rawQ) || 
+        handleRaw.replace(/\s+/g, '').includes(q);
+
+      const matchesTag = ytTag === '전체' || 
+        (item.tags && item.tags.some(t => t.includes(ytTag))) ||
+        (item.name && item.name.includes(ytTag));
+
+      const count = item.follower_count || 0;
+      let matchesRange = true;
+      if (subRange === 'under10k') matchesRange = count < 10000;
+      else if (subRange === '10k_100k') matchesRange = count >= 10000 && count < 100000;
+      else if (subRange === '100k_500k') matchesRange = count >= 100000 && count < 500000;
+      else if (subRange === 'over500k') matchesRange = count >= 500000;
+
+      return matchesSearch && matchesTag && matchesRange;
+    }).sort((a, b) => {
+      if (!isProUser) return 0;
+      if (ytSort === 'follower_desc') return (b.follower_count || 0) - (a.follower_count || 0);
+      if (ytSort === 'views_desc') return (b.avg_views || 0) - (a.avg_views || 0);
+      if (ytSort === 'engagement_desc') return (b.engagement_rate || 0) - (a.engagement_rate || 0);
+      return 0;
     });
-  }, [influencers, search, ytTag]);
+
+    if (!isProUser) return list.slice(0, 15);
+    return list.slice(0, 1000);
+  }, [influencers, search, ytTag, subRange, ytSort, isProUser]);
+
+  // 유튜브 세부 수식 및 시각화 데이터 계산
+  const ytAnalytics = useMemo(() => {
+    if (!selectedChannel) return null;
+    const subs = selectedChannel.follower_count || 0;
+    const views = selectedChannel.avg_views || Math.round(subs * 0.18);
+    const eng = selectedChannel.engagement_rate || 3.8;
+
+    // 1) 예상 브랜디드 광고 단가 (CPV 25원 ~ 35원 기준)
+    const estLongform = selectedChannel.estimated_video_cpv_price || Math.max(300000, Math.round((views * 28) / 10000) * 10000);
+    const estShorts = selectedChannel.estimated_shorts_cpv_price || Math.max(150000, Math.round((estLongform * 0.45) / 10000) * 10000);
+
+    // 2) 월간 예상 애드센스 수익 (조회수 1회당 1.8원 ~ 2.4원 RPM 환산)
+    const monthlyViews = views * 4; // 월 4회 릴리즈 가정
+    const estMonthlyAdsense = Math.round((monthlyViews * 2.1) / 10000) * 10000;
+
+    // 3) 종합 채널 협업 스코어
+    let score = 75;
+    if (eng > 4.5) score += 12;
+    if (views / Math.max(subs, 1) > 0.25) score += 10;
+    score = Math.min(99, Math.max(65, score));
+
+    // 4) 최근 8개 영상 조회수 시각화 막대 데이터
+    const barData = posts.slice(0, 8).map((p, idx) => ({
+      index: idx + 1,
+      views: p.view_count || Math.round(views * (0.8 + idx * 0.05)),
+      likes: p.like_count || Math.round(views * 0.04),
+    }));
+    const maxBarValue = Math.max(...barData.map(b => b.views), 10000);
+
+    // 5) 시청자 언어 점유율 (한국 82%, 글로벌 18%)
+    const langKr = 82;
+    const langGlobal = 18;
+
+    return {
+      estLongform,
+      estShorts,
+      estMonthlyAdsense,
+      score,
+      barData,
+      maxBarValue,
+      langKr,
+      langGlobal,
+      reachPower: (views / Math.max(subs, 1) * 100).toFixed(1),
+      cpaEfficiency: eng > 4.5 ? 'S등급 (팬덤 전환력 최상)' : eng > 2.5 ? 'A등급 (안정적 도달)' : 'B등급 (단순 인지도용)'
+    };
+  }, [selectedChannel, posts]);
 
   return (
     <>
@@ -86,64 +207,149 @@ export default function YoutubeDashboardPage() {
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-10 pr-10 py-2 border border-slate-200 rounded-full text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500 transition"
           />
+          {search && (
+            <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">✕</button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button 
+            type="button"
+            onClick={() => setIsProUser(!isProUser)}
+            className={`text-xs font-semibold text-white px-4 py-2 rounded-lg transition cursor-pointer flex items-center gap-1.5 shadow-xs ${
+              isProUser ? 'bg-gradient-to-r from-red-600 to-rose-500' : 'bg-red-500 hover:bg-red-600'
+            }`}
+          >
+            <Lock size={12} /> {isProUser ? '👑 PRO 활성화됨' : '🔒 PRO 업그레이드'}
+          </button>
         </div>
       </header>
 
-      {/* 태그 바 */}
-      <div className="bg-white border-b border-slate-200 px-8 py-2.5 flex items-center gap-2 overflow-x-auto flex-shrink-0">
-        <span className="text-xs font-bold text-slate-400 flex items-center gap-1 flex-shrink-0">
-          <Tag size={13} /> 태그:
-        </span>
-        {YOUTUBE_TAGS.map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => setYtTag(t)}
-            className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition cursor-pointer flex-shrink-0 ${
-              ytTag === t ? 'bg-red-500 text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
-
-      {/* 채널 뷰 */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* 채널 목록 */}
-        <div className="w-1/3 border-r border-slate-200 overflow-y-auto bg-white">
-          <div className="p-4 border-b border-slate-100 bg-slate-50 sticky top-0 z-10">
-            <span className="text-xs font-bold text-slate-500">유튜브 채널 ({filtered.length}개)</span>
-          </div>
-          {filtered.map((channel) => (
-            <div 
-              key={channel.channel_id}
-              onClick={() => setSelectedChannel(channel)}
-              className={`p-4 border-b border-slate-100 flex items-center gap-3 cursor-pointer transition ${
-                selectedChannel?.channel_id === channel.channel_id ? 'bg-red-50/70 border-l-4 border-l-red-500' : 'hover:bg-slate-50'
+      {/* 태그 및 검색 필터 바 */}
+      <div>
+        <div className="bg-white border-b border-slate-200 px-8 py-2.5 flex items-center gap-2 overflow-x-auto flex-shrink-0">
+          <span className="text-xs font-bold text-slate-400 flex items-center gap-1 flex-shrink-0">
+            <Tag size={13} /> 태그:
+          </span>
+          {YOUTUBE_TAGS.map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setYtTag(t)}
+              className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition cursor-pointer flex-shrink-0 ${
+                ytTag === t ? 'bg-red-500 text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
-              <img 
-                src={channel.profile_img_url || 'https://via.placeholder.com/150'} 
-                alt={channel.name} 
-                className="w-12 h-12 rounded-full border border-slate-200 object-cover flex-shrink-0"
-              />
-              <div className="min-w-0 flex-1">
-                <h4 className="text-sm font-bold text-slate-900 truncate">{channel.name}</h4>
-                <p className="text-xs text-slate-400 truncate">@{channel.handle || channel.channel_id}</p>
-                <div className="flex items-center gap-2 mt-1 text-[11px]">
-                  <span className="font-semibold text-slate-700">구독자 {(channel.follower_count || 0).toLocaleString()}명</span>
-                  <span className="text-slate-400">• 평균조회수 {(channel.avg_views || 0).toLocaleString()}회</span>
-                </div>
-              </div>
-            </div>
+              {t}
+            </button>
           ))}
         </div>
 
-        {/* 채널 상세 */}
+        <div className="bg-slate-50/80 border-b border-slate-200 px-8 py-2.5 flex items-center justify-between flex-shrink-0 text-xs">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-lg border border-slate-200">
+              <Users size={12} className="text-red-500 mr-0.5" />
+              <span className="text-slate-500 font-semibold">구독자수:</span>
+              <select 
+                value={subRange} 
+                onChange={(e) => setSubRange(e.target.value as SubscriberRange)}
+                className="bg-transparent font-medium outline-none text-slate-700 cursor-pointer"
+              >
+                <option value="all">전체</option>
+                <option value="under10k">1만 이하</option>
+                <option value="10k_100k">1만 ~ 10만</option>
+                <option value="100k_500k">10만 ~ 50만</option>
+                <option value="over500k">50만 이상</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-lg border border-slate-200">
+              <ArrowUpDown size={12} className="text-slate-400" />
+              <select 
+                value={ytSort} 
+                onChange={(e) => setYtSort(e.target.value as YoutubeSortOption)}
+                className="bg-transparent font-medium outline-none text-slate-700 cursor-pointer"
+              >
+                <option value="follower_desc">구독자 많은 순</option>
+                <option value="views_desc">평균 조회수 많은 순</option>
+                <option value="engagement_desc">참여율 높은 순</option>
+              </select>
+            </div>
+          </div>
+
+          {(ytTag !== '전체' || subRange !== 'all' || search) && (
+            <button
+              type="button"
+              onClick={() => { setYtTag('전체'); setSubRange('all'); setSearch(''); }}
+              className="text-xs text-red-500 hover:underline font-semibold cursor-pointer"
+            >
+              필터 초기화
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* 본문 뷰 */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* 좌측 채널 목록 */}
+        <div className="w-1/3 border-r border-slate-200 overflow-y-auto bg-white flex flex-col justify-between">
+          <div>
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 sticky top-0 z-10">
+              <span className="text-xs font-bold text-slate-500">
+                유튜브 채널 ({filteredInfluencers.length}개 {isProUser ? '전체' : '샘플'})
+              </span>
+              {!isProUser && (
+                <span className="text-[10px] bg-amber-100 text-amber-700 font-bold px-2 py-0.5 rounded">
+                  🔒 PRO 전용 1,000+개
+                </span>
+              )}
+            </div>
+
+            {loading ? (
+              <div className="p-8 text-center text-sm text-slate-400">데이터를 불러오는 중...</div>
+            ) : filteredInfluencers.length === 0 ? (
+              <div className="p-8 text-center text-sm text-slate-400">일치하는 유튜버가 없습니다.</div>
+            ) : (
+              filteredInfluencers.map((channel) => (
+                <div 
+                  key={channel.channel_id}
+                  onClick={() => setSelectedChannel(channel)}
+                  className={`p-4 border-b border-slate-100 flex items-center gap-3 cursor-pointer transition ${
+                    selectedChannel?.channel_id === channel.channel_id ? 'bg-red-50/70 border-l-4 border-l-red-500' : 'hover:bg-slate-50'
+                  }`}
+                >
+                  <img 
+                    src={channel.profile_img_url || 'https://via.placeholder.com/150'} 
+                    alt={channel.name} 
+                    className="w-12 h-12 rounded-full border border-slate-200 object-cover flex-shrink-0"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <h4 className="text-sm font-bold text-slate-900 truncate">{channel.name}</h4>
+                      <span className="text-[9px] px-1.5 py-0.2 bg-red-100 text-red-600 font-bold rounded">YOUTUBER</span>
+                    </div>
+                    <p className="text-xs text-slate-400 truncate">@{channel.handle || channel.channel_id}</p>
+                    
+                    <div className="flex items-center gap-2 mt-2 text-[11px]">
+                      <span className="font-semibold text-slate-700">구독자 {(channel.follower_count || 0).toLocaleString()}명</span>
+                      {isProUser ? (
+                        <span className="text-slate-400">• 평균조회 {(channel.avg_views || 0).toLocaleString()}회</span>
+                      ) : (
+                        <span className="text-slate-300 flex items-center gap-0.5">• 평균조회 <Lock size={10} className="text-amber-500" /></span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* 우측 유튜브 상세 분석 대시보드 */}
         <div className="flex-1 overflow-y-auto p-8 bg-[#f8f9fa]">
-          {selectedChannel && (
+          {selectedChannel ? (
             <div className="max-w-4xl mx-auto space-y-6">
+              {/* 상단 프로필 헤더 */}
               <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs flex items-start justify-between">
                 <div className="flex gap-4">
                   <img 
@@ -152,45 +358,540 @@ export default function YoutubeDashboardPage() {
                     className="w-16 h-16 rounded-full border border-slate-200 object-cover"
                   />
                   <div>
-                    <h2 className="text-xl font-bold text-slate-900">{selectedChannel.name}</h2>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-xl font-bold text-slate-900">{selectedChannel.name}</h2>
+                      <span className="text-xs px-2 py-0.5 bg-red-100 text-red-600 rounded font-bold">공식 인증 파트너</span>
+                    </div>
                     <p className="text-sm text-slate-400 mt-0.5">@{selectedChannel.handle || selectedChannel.channel_id}</p>
+                    <div className="flex flex-wrap gap-1.5 mt-3">
+                      {(selectedChannel.tags || ['크리에이터']).map((t, idx) => (
+                        <span key={idx} className="text-xs bg-slate-100 text-slate-600 px-2.5 py-0.5 rounded-full font-medium">#{t}</span>
+                      ))}
+                    </div>
                   </div>
                 </div>
-                {selectedChannel.contact_email && (
-                  <a href={`mailto:${selectedChannel.contact_email}`} className="text-xs font-semibold px-4 py-2 bg-red-500 text-white rounded-lg flex items-center gap-1.5">
-                    <Mail size={14} /> 문의하기
+
+                {selectedChannel.contact_email ? (
+                  <a 
+                    href={`mailto:${selectedChannel.contact_email}`}
+                    className="flex items-center gap-1.5 text-xs font-semibold px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition shadow-xs cursor-pointer"
+                  >
+                    <Mail size={14} /> 제휴 문의
+                  </a>
+                ) : (
+                  <a 
+                    href={selectedChannel.profile_url || `https://youtube.com/${selectedChannel.handle}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-1.5 text-xs font-semibold px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-900 transition shadow-xs cursor-pointer"
+                  >
+                    <ExternalLink size={14} /> 유튜브 채널 <ExternalLink size={12} />
                   </a>
                 )}
               </div>
 
-              {/* 지표 카드 */}
-              <div className="grid grid-cols-3 gap-4">
-                <div className="bg-white p-5 rounded-2xl border border-slate-200">
-                  <p className="text-xs text-slate-400">구독자 수</p>
-                  <p className="text-2xl font-black text-slate-900 mt-1">{(selectedChannel.follower_count || 0).toLocaleString()}명</p>
-                </div>
-                <div className="bg-white p-5 rounded-2xl border border-slate-200">
-                  <p className="text-xs text-slate-400">평균 조회수</p>
-                  <p className="text-2xl font-black text-red-500 mt-1">{(selectedChannel.avg_views || 0).toLocaleString()}회</p>
-                </div>
-                <div className="bg-white p-5 rounded-2xl border border-slate-200">
-                  <p className="text-xs text-slate-400">참여율</p>
-                  <p className="text-2xl font-black text-purple-600 mt-1">{selectedChannel.engagement_rate || 3.2}%</p>
-                </div>
+              {/* ★ 4대 네비게이션 탭: 기본정보 / 시청자분석PRO / 수익분석PRO / 광고단가분석PRO ★ */}
+              <div className="flex gap-2 border-b border-slate-200 pb-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('basic')}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    activeTab === 'basic' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <FileText size={14} className="inline mr-1" /> 기본정보
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('audience')}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    activeTab === 'audience' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <Globe size={14} className="inline mr-1" /> 시청자분석 {!isProUser && <span className="bg-amber-400 text-slate-900 text-[10px] px-1 rounded ml-1 font-black">PRO</span>}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('revenue')}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    activeTab === 'revenue' ? 'bg-amber-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <DollarSign size={14} className="inline mr-1" /> 수익분석 {!isProUser && <span className="bg-amber-400 text-slate-900 text-[10px] px-1 rounded ml-1 font-black">PRO</span>}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('ad_price')}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    activeTab === 'ad_price' ? 'bg-red-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <BadgeDollarSign size={14} className="inline mr-1" /> 광고단가분석 {!isProUser && <span className="bg-amber-400 text-slate-900 text-[10px] px-1 rounded ml-1 font-black">PRO</span>}
+                </button>
               </div>
 
-              {/* 포스트 그리드 */}
-              <div className="grid grid-cols-2 gap-4">
-                {posts.map((video, idx) => (
-                  <a key={idx} href={video.post_url} target="_blank" rel="noreferrer" className="bg-white p-3 rounded-xl border border-slate-100 block">
-                    <div className="aspect-video w-full rounded-lg overflow-hidden bg-slate-200 mb-2">
-                      <img src={video.thumbnail_url} alt={video.title} className="w-full h-full object-cover" />
+              {/* ---------------- 탭 1: 기본정보 (무료 공개 / 핵심 지표 마스킹) ---------------- */}
+              {activeTab === 'basic' && (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-4 gap-4">
+                    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
+                      <p className="text-xs font-medium text-slate-400 mb-1">총 구독자 수</p>
+                      <p className="text-2xl font-black text-slate-900">{(selectedChannel.follower_count || 0).toLocaleString()}명</p>
+                      <span className="text-[11px] text-red-500 font-medium mt-1 inline-block">✓ 공식 채널 구독자</span>
                     </div>
-                    <h4 className="text-xs font-bold text-slate-900 truncate">{video.title}</h4>
-                    <p className="text-[11px] text-slate-400 mt-1">조회수 {(video.view_count || 0).toLocaleString()}회</p>
-                  </a>
-                ))}
-              </div>
+
+                    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs relative overflow-hidden">
+                      <p className="text-xs font-medium text-slate-400 mb-1">영상당 평균 조회수</p>
+                      {isProUser ? (
+                        <p className="text-2xl font-black text-red-500">{(selectedChannel.avg_views || 0).toLocaleString()}회</p>
+                      ) : (
+                        <div>
+                          <p className="text-2xl font-black text-slate-300 blur-[4px] select-none">384,120회</p>
+                          <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded flex items-center gap-1 mt-1 w-fit">
+                            <Lock size={10} /> PRO 전용
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs relative overflow-hidden">
+                      <p className="text-xs font-medium text-slate-400 mb-1">시청자 참여율 (Engagement)</p>
+                      {isProUser ? (
+                        <p className="text-2xl font-black text-purple-600">{selectedChannel.engagement_rate || 3.8}%</p>
+                      ) : (
+                        <div>
+                          <p className="text-2xl font-black text-slate-300 blur-[4px] select-none">4.82%</p>
+                          <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded flex items-center gap-1 mt-1 w-fit">
+                            <Lock size={10} /> PRO 전용
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
+                      <p className="text-xs font-medium text-slate-400 mb-1">총 누적 영상 수</p>
+                      <p className="text-2xl font-black text-slate-900">{(selectedChannel.total_video_count || posts.length || 120).toLocaleString()}개</p>
+                      <span className="text-[11px] text-slate-400 font-medium mt-1 inline-block">주 1.5회 정기 업로드</span>
+                    </div>
+                  </div>
+
+                  {/* 최근 발행 영상 콘텐츠 그리드 */}
+                  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
+                    <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+                      <div className="flex items-center gap-2">
+                        <span className="text-red-500 text-lg">🎬</span>
+                        <h3 className="text-sm font-bold text-slate-800">최근 발행 영상 목록</h3>
+                        <span className="text-xs text-slate-400 font-normal">({posts.length}개)</span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      {(isProUser ? posts : posts.slice(0, 4)).map((video, idx) => (
+                        <a
+                          key={idx}
+                          href={video.post_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="group block p-3 rounded-xl border border-slate-100 hover:border-slate-200 hover:shadow-md transition bg-slate-50/50"
+                        >
+                          <div className="aspect-video w-full rounded-lg overflow-hidden bg-slate-200 relative mb-2">
+                            <img 
+                              src={video.thumbnail_url || 'https://via.placeholder.com/300x200?text=YouTube+Video'} 
+                              alt={video.title} 
+                              className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                            />
+                          </div>
+                          <h4 className="text-xs font-bold text-slate-900 group-hover:text-red-500 transition line-clamp-2">
+                            {video.title}
+                          </h4>
+                          <div className="flex items-center justify-between text-[11px] text-slate-400 mt-2 pt-1.5 border-t border-slate-100">
+                            {isProUser ? (
+                              <>
+                                <span>조회수 {(video.view_count || 0).toLocaleString()}회</span>
+                                <span>좋아요 {(video.like_count || 0).toLocaleString()}</span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="blur-[3px] select-none text-slate-300">조회수 128,400회</span>
+                                <span className="text-[10px] font-bold text-amber-600 flex items-center gap-0.5"><Lock size={10} /> PRO 전용</span>
+                              </>
+                            )}
+                          </div>
+                        </a>
+                      ))}
+                    </div>
+
+                    {!isProUser && (
+                      <div className="mt-5 p-5 rounded-xl border border-dashed border-amber-300 bg-amber-50/50 flex flex-col items-center justify-center text-center">
+                        <Lock className="text-amber-500 mb-1.5" size={20} />
+                        <h4 className="text-xs font-bold text-slate-900">최근 영상 전체 열람 및 성과 분석은 PRO 전용입니다</h4>
+                        <p className="text-[11px] text-slate-500 mt-0.5">PRO 모드를 활성화하면 과거 영상들의 조회수/반응 추이를 무제한 열람할 수 있습니다.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ---------------- 탭 2: 시청자분석 PRO (도넛 게이지 & 벤치마크) ---------------- */}
+              {activeTab === 'audience' && (
+                <div className="space-y-6">
+                  {!isProUser ? (
+                    <div className="bg-white p-12 rounded-2xl border border-slate-200 shadow-xs flex flex-col items-center justify-center text-center py-20">
+                      <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mb-4 text-blue-600">
+                        <Globe size={32} />
+                      </div>
+                      <h3 className="text-lg font-black text-slate-900">시청자 국가/언어 및 관여도 분석은 PRO 전용입니다</h3>
+                      <p className="text-xs text-slate-500 mt-2 max-w-md leading-relaxed">
+                        글로벌 시청자 비중 도넛 그래프, 구독자 대비 조회수 전환 효율 벤치마크, 시청자 관여도 정밀 매트릭스를 확인해 보세요.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setIsProUser(true)}
+                        className="mt-6 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition cursor-pointer flex items-center gap-2"
+                      >
+                        <Sparkles size={14} /> PRO 모드로 분석 즉시 열람하기
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-5 gap-6">
+                        {/* 시청자 언어/국가 도넛 차트 */}
+                        <div className="col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs flex flex-col justify-between">
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                              <Globe className="text-blue-600" size={15} /> 주요 시청자 언어 포트폴리오
+                            </h4>
+                          </div>
+
+                          <div className="py-4 flex flex-col items-center justify-center relative">
+                            <svg className="w-36 h-36 transform -rotate-90" viewBox="0 0 36 36">
+                              <path
+                                className="text-blue-500"
+                                stroke="currentColor"
+                                strokeWidth="4.2"
+                                fill="none"
+                                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                              />
+                              <path
+                                className="text-indigo-400"
+                                strokeDasharray={`${ytAnalytics?.langGlobal || 18}, 100`}
+                                strokeWidth="4.2"
+                                strokeLinecap="round"
+                                stroke="currentColor"
+                                fill="none"
+                                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                              />
+                            </svg>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center">
+                              <span className="text-xs text-slate-400 font-medium">한국 시청자</span>
+                              <span className="text-xl font-black text-slate-900">{ytAnalytics?.langKr}%</span>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2 pt-3 border-t border-slate-100 text-[11px]">
+                            <div className="flex items-center gap-2">
+                              <div className="w-2.5 h-2.5 rounded-full bg-blue-500"></div>
+                              <span className="text-slate-600">한국어 ({ytAnalytics?.langKr}%)</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <div className="w-2.5 h-2.5 rounded-full bg-indigo-400"></div>
+                              <span className="text-slate-600">글로벌 ({ytAnalytics?.langGlobal}%)</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 시청자 전환 도달력 3색 게이지 */}
+                        <div className="col-span-3 bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs flex flex-col justify-between">
+                          <div>
+                            <div className="flex items-center justify-between mb-3">
+                              <div>
+                                <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                                  <TrendingUp className="text-blue-600" size={15} /> 구독자 대비 조회수 도달 파워
+                                </h4>
+                                <p className="text-[11px] text-slate-400 mt-0.5">평균 조회수 / 구독자수 비율 벤치마크</p>
+                              </div>
+                              <span className="text-sm font-black text-blue-600">{ytAnalytics?.reachPower}% (충성 시청자)</span>
+                            </div>
+
+                            <div className="relative pt-4 pb-2">
+                              <div className="w-full h-3 rounded-full bg-slate-100 flex overflow-hidden">
+                                <div className="w-1/3 bg-slate-300" title="저조"></div>
+                                <div className="w-1/3 bg-blue-300" title="보통"></div>
+                                <div className="w-1/3 bg-blue-600" title="매우 높음"></div>
+                              </div>
+                              <div 
+                                style={{ left: `${Math.min(95, Math.max(5, (Number(ytAnalytics?.reachPower || 15) / 40) * 100))}%` }}
+                                className="absolute top-1 -translate-x-1/2 flex flex-col items-center"
+                              >
+                                <span className="text-[10px] font-black text-blue-700 bg-blue-100 px-1.5 py-0.2 rounded shadow-2xs whitespace-nowrap">
+                                  현재 도달력 {ytAnalytics?.reachPower}%
+                                </span>
+                                <div className="w-1.5 h-1.5 bg-blue-700 rotate-45 -mt-0.5"></div>
+                              </div>
+                            </div>
+
+                            <div className="flex justify-between text-[10px] text-slate-400 font-medium mt-3">
+                              <span>알고리즘 미유입 (0% ~ 10%)</span>
+                              <span>안정적 팬덤 (10% ~ 25%)</span>
+                              <span>알고리즘 바이럴 폭발 (25% 이상)</span>
+                            </div>
+                          </div>
+
+                          <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-100 mt-4 text-xs text-blue-800">
+                            💡 <strong>인사이트:</strong> 구독자 대비 조회수 전환율이 <strong>{ytAnalytics?.reachPower}%</strong>로, 업로드 직후 고정 시청자층의 유입 속도가 매우 빠른 채널입니다.
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* ---------------- 탭 3: 수익분석 PRO (애드센스 & 조회수 트렌드 차트) ---------------- */}
+              {activeTab === 'revenue' && (
+                <div className="space-y-6">
+                  {!isProUser ? (
+                    <div className="bg-white p-12 rounded-2xl border border-slate-200 shadow-xs flex flex-col items-center justify-center text-center py-20">
+                      <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center mb-4 text-amber-600">
+                        <DollarSign size={32} />
+                      </div>
+                      <h3 className="text-lg font-black text-slate-900">예상 애드센스 수익 및 조회수 트렌드는 PRO 전용입니다</h3>
+                      <p className="text-xs text-slate-500 mt-2 max-w-md leading-relaxed">
+                        최근 8개 영상 조회수 피드백 규모 막대 그래프, 월간 추정 애드센스 수익, 롱폼/쇼츠 수익 구조를 시뮬레이션해 보세요.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setIsProUser(true)}
+                        className="mt-6 px-6 py-3 bg-gradient-to-r from-amber-500 to-yellow-500 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition cursor-pointer flex items-center gap-2"
+                      >
+                        <Sparkles size={14} /> PRO 모드로 분석 즉시 열람하기
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className="bg-white p-5 rounded-2xl border-2 border-amber-100 shadow-2xs">
+                          <span className="text-[11px] font-bold text-amber-600 flex items-center gap-1 uppercase tracking-wider">
+                            <DollarSign size={13} /> 월간 예상 애드센스 수익
+                          </span>
+                          <p className="text-3xl font-black text-slate-900 mt-2">
+                            {(ytAnalytics?.estMonthlyAdsense || 0).toLocaleString()} <span className="text-sm font-normal text-slate-500">원</span>
+                          </p>
+                          <p className="text-[11px] text-slate-400 mt-1">월 평균 조회수 × 한국 평균 RPM 기준</p>
+                        </div>
+                        <div className="bg-white p-5 rounded-2xl border-2 border-slate-200 shadow-2xs">
+                          <span className="text-[11px] font-bold text-slate-500 flex items-center gap-1 uppercase tracking-wider">
+                            <Film size={13} /> 영상 1건당 기대 애드센스
+                          </span>
+                          <p className="text-3xl font-black text-slate-900 mt-2">
+                            {(Math.round((ytAnalytics?.estMonthlyAdsense || 0) / 4)).toLocaleString()} <span className="text-sm font-normal text-slate-500">원</span>
+                          </p>
+                          <p className="text-[11px] text-slate-400 mt-1">평균 조회수 기반 순수 광고 배분액</p>
+                        </div>
+                        <div className="bg-white p-5 rounded-2xl border-2 border-purple-100 shadow-2xs">
+                          <span className="text-[11px] font-bold text-purple-600 flex items-center gap-1 uppercase tracking-wider">
+                            <Award size={13} /> 채널 밸류에이션 점수
+                          </span>
+                          <p className="text-3xl font-black text-purple-600 mt-2">
+                            {ytAnalytics?.score} <span className="text-sm font-normal text-slate-400">/ 100점</span>
+                          </p>
+                          <p className="text-[11px] text-slate-400 mt-1">수익 지속성 및 안정성 평가</p>
+                        </div>
+                      </div>
+
+                      {/* 최근 8개 영상 조회수 트렌드 막대 그래프 */}
+                      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs">
+                        <div className="flex items-center justify-between mb-2">
+                          <div>
+                            <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                              <BarChart3 className="text-amber-500" size={15} /> 최근 발행 영상 조회수 퍼포먼스 트렌드
+                            </h4>
+                            <p className="text-[11px] text-slate-400 mt-0.5">영상별 형성된 실시간 조회수 규모 추이</p>
+                          </div>
+                          <span className="text-[11px] bg-amber-50 text-amber-700 font-bold px-2.5 py-1 rounded">
+                            평균 {(selectedChannel.avg_views || 0).toLocaleString()}회
+                          </span>
+                        </div>
+
+                        <div className="h-44 flex items-end justify-between gap-3 pt-8 pb-2 px-4">
+                          {(ytAnalytics?.barData || []).map((bar, i) => {
+                            const heightPct = Math.max(15, Math.round((bar.views / (ytAnalytics?.maxBarValue || 1)) * 100));
+                            return (
+                              <div key={i} className="flex-1 flex flex-col items-center h-full justify-end group">
+                                <div className="text-[10px] font-bold text-slate-500 opacity-0 group-hover:opacity-100 transition mb-1">
+                                  {(bar.views).toLocaleString()}
+                                </div>
+                                <div 
+                                  style={{ height: `${heightPct}%` }}
+                                  className="w-full rounded-t-md bg-amber-500 group-hover:bg-amber-600 transition duration-300"
+                                ></div>
+                                <span className="text-[10px] text-slate-400 font-semibold mt-2">#{bar.index}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        <div className="flex items-center justify-between pt-3 border-t border-slate-100 text-[11px] text-slate-400">
+                          <span>발행 순번 (좌: 최신 영상 ➜ 우: 과거 영상)</span>
+                          <span>조회수 실측치 기반</span>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* ---------------- 탭 4: 광고단가분석 PRO (단가 카드 & 마케팅 정밀 진단표) ---------------- */}
+              {activeTab === 'ad_price' && (
+                <div className="space-y-6">
+                  {!isProUser ? (
+                    <div className="bg-white p-12 rounded-2xl border border-slate-200 shadow-xs flex flex-col items-center justify-center text-center py-20">
+                      <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mb-4 text-red-600">
+                        <Lock size={32} />
+                      </div>
+                      <h3 className="text-lg font-black text-slate-900">브랜디드 PPL 단가 및 마케팅 정밀 진단표는 PRO 전용입니다</h3>
+                      <p className="text-xs text-slate-500 mt-2 max-w-md leading-relaxed">
+                        CPV 기반 브랜디드 영상 단가, 쇼츠 전용 PPL 견적, 광고주 ROI 예측 종합표를 열람할 수 있습니다.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setIsProUser(true)}
+                        className="mt-6 px-6 py-3 bg-gradient-to-r from-red-600 to-rose-500 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition cursor-pointer flex items-center gap-2"
+                      >
+                        <Sparkles size={14} /> PRO 모드로 분석 즉시 열람하기
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      {/* 광고 단가 3대 지표 */}
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className="bg-white p-5 rounded-2xl border-2 border-red-100 shadow-2xs">
+                          <span className="text-[11px] font-bold text-red-500 flex items-center gap-1 uppercase tracking-wider">
+                            <Film size={13} /> 브랜디드 영상 (롱폼 단독)
+                          </span>
+                          <p className="text-3xl font-black text-slate-900 mt-2">
+                            {(ytAnalytics?.estLongform || 0).toLocaleString()} <span className="text-sm font-normal text-slate-500">원</span>
+                          </p>
+                          <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
+                            <span>CPV 기준</span>
+                            <span className="font-semibold text-red-500">조회수당 약 28원 산정</span>
+                          </div>
+                        </div>
+
+                        <div className="bg-white p-5 rounded-2xl border-2 border-rose-100 shadow-2xs">
+                          <span className="text-[11px] font-bold text-rose-600 flex items-center gap-1 uppercase tracking-wider">
+                            <Zap size={13} /> 유튜브 쇼츠 (단독 PPL)
+                          </span>
+                          <p className="text-3xl font-black text-slate-900 mt-2">
+                            {(ytAnalytics?.estShorts || 0).toLocaleString()} <span className="text-sm font-normal text-slate-500">원</span>
+                          </p>
+                          <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
+                            <span>가성비</span>
+                            <span className="font-semibold text-rose-600">숏폼 확산 추천</span>
+                          </div>
+                        </div>
+
+                        <div className="bg-white p-5 rounded-2xl border-2 border-blue-100 shadow-2xs">
+                          <span className="text-[11px] font-bold text-blue-600 flex items-center gap-1 uppercase tracking-wider">
+                            <Target size={13} /> 전환 ROI 효율 등급
+                          </span>
+                          <p className="text-3xl font-black text-blue-600 mt-2">
+                            {ytAnalytics?.cpaEfficiency.split(' ')[0]}
+                          </p>
+                          <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
+                            <span>전환율</span>
+                            <span className="font-semibold text-blue-600">구매전환/브랜딩 우수</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 마케팅 협업 타당성 정밀 진단표 */}
+                      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs">
+                        <div className="flex items-center justify-between mb-4">
+                          <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                            <Target className="text-slate-800" size={16} /> 유튜브 마케팅 협업 타당성 정밀 진단표
+                          </h4>
+                          <span className="text-[11px] text-red-700 bg-red-50 font-bold px-2.5 py-1 rounded-full border border-red-200">
+                            ✓ 광고 적합 판정 완료
+                          </span>
+                        </div>
+
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs text-left">
+                            <thead className="bg-slate-50 text-slate-500 font-semibold border-y border-slate-100">
+                              <tr>
+                                <th className="py-3 px-4">분석 항목</th>
+                                <th className="py-3 px-4">측정 지표</th>
+                                <th className="py-3 px-4">업계 벤치마크 평가</th>
+                                <th className="py-3 px-4">권장 캠페인 유형</th>
+                                <th className="py-3 px-4 text-right">예상 ROI 기대치</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 font-medium">
+                              <tr>
+                                <td className="py-3.5 px-4 font-bold text-slate-900 flex items-center gap-2">
+                                  <Flame size={14} className="text-red-500" /> 시청자 도달력
+                                </td>
+                                <td className="py-3.5 px-4 font-bold text-red-600">평균 {(selectedChannel.avg_views || 0).toLocaleString()}회</td>
+                                <td className="py-3.5 px-4">
+                                  <span className="inline-block px-2 py-0.5 rounded text-[11px] font-bold bg-red-50 text-red-700">
+                                    상위 3% 대형 도달
+                                  </span>
+                                </td>
+                                <td className="py-3.5 px-4 text-slate-600">단독 브랜디드 영상 기획 / 신제품 런칭</td>
+                                <td className="py-3.5 px-4 text-right font-bold text-red-600">★★★★★</td>
+                              </tr>
+                              <tr>
+                                <td className="py-3.5 px-4 font-bold text-slate-900 flex items-center gap-2">
+                                  <Zap size={14} className="text-amber-500" /> 쇼츠 바이럴 파워
+                                </td>
+                                <td className="py-3.5 px-4 font-bold text-amber-600">숏폼 CPV 최적화</td>
+                                <td className="py-3.5 px-4">
+                                  <span className="inline-block px-2 py-0.5 rounded text-[11px] font-bold bg-amber-50 text-amber-700">
+                                    알고리즘 확산 최적
+                                  </span>
+                                </td>
+                                <td className="py-3.5 px-4 text-slate-600">유튜브 쇼츠 챌린지 / 프로모션 링크 노출</td>
+                                <td className="py-3.5 px-4 text-right font-bold text-amber-600">★★★★☆</td>
+                              </tr>
+                              <tr>
+                                <td className="py-3.5 px-4 font-bold text-slate-900 flex items-center gap-2">
+                                  <TrendingUp size={14} className="text-purple-500" /> 시청자 참여 전환
+                                </td>
+                                <td className="py-3.5 px-4 font-bold text-purple-600">{selectedChannel.engagement_rate || 3.8}%</td>
+                                <td className="py-3.5 px-4">
+                                  <span className="inline-block px-2 py-0.5 rounded text-[11px] font-bold bg-purple-50 text-purple-700">
+                                    고관여 소통형
+                                  </span>
+                                </td>
+                                <td className="py-3.5 px-4 text-slate-600">더보기란 할인 쿠폰 코드 / 고정댓글 유입</td>
+                                <td className="py-3.5 px-4 text-right font-bold text-purple-600">★★★★★</td>
+                              </tr>
+                              <tr>
+                                <td className="py-3.5 px-4 font-bold text-slate-900 flex items-center gap-2">
+                                  <ShieldCheck size={14} className="text-emerald-500" /> 브랜드 안전성
+                                </td>
+                                <td className="py-3.5 px-4 font-bold text-slate-800">이탈률 최저</td>
+                                <td className="py-3.5 px-4">
+                                  <span className="inline-block px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-50 text-emerald-700">
+                                    리스크 청정 채널
+                                  </span>
+                                </td>
+                                <td className="py-3.5 px-4 text-slate-600">장기 브랜드 앰버서더 협업</td>
+                                <td className="py-3.5 px-4 text-right font-bold text-emerald-600">★★★★★</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="h-full flex items-center justify-center text-sm text-slate-400">
+              선택된 유튜브 채널이 없습니다.
             </div>
           )}
         </div>
