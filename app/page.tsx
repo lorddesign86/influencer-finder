@@ -235,10 +235,29 @@ export default function PlatformDashboard() {
   const filteredBloggers = useMemo(() => {
     const list = bloggers
       .filter((item) => {
-        const q = search.trim().toLowerCase();
-        const matchesSearch = !q || 
-          (item.name && item.name.toLowerCase().includes(q)) || 
-          (item.handle && item.handle.toLowerCase().includes(q));
+const rawQ = search.trim().toLowerCase();
+const q = rawQ.replace(/\s+/g, ''); // 띄어쓰기 제거 검색어
+
+const matchesSearch = !rawQ || (() => {
+  // 1. 이름 및 아이디 (공백 제거 비교)
+  const nameClean = (item.name || '').toLowerCase().replace(/\s+/g, '');
+  const handleClean = (item.handle || item.blog_id || '').toLowerCase().replace(/\s+/g, '');
+  if (nameClean.includes(q) || handleClean.includes(q)) return true;
+
+  // 2. 태그 / 전문 분야 목록 (예: #여행 플래너, #여행 전문블로거, #푸드 등)
+  if (item.tags && Array.isArray(item.tags)) {
+    const hasTagMatch = item.tags.some(tag => {
+      const tagClean = tag.toLowerCase().replace(/\s+/g, '');
+      return tagClean.includes(q) || q.includes(tagClean);
+    });
+    if (hasTagMatch) return true;
+  }
+
+  // 3. 프로필 URL
+  if (item.profile_url && item.profile_url.toLowerCase().includes(rawQ)) return true;
+
+  return false;
+})();
 
         const matchesCat = blogCat === '전체' || 
           (item.tags && item.tags.some(t => t.includes(blogCat))) ||
