@@ -1014,7 +1014,7 @@ export default function PlatformDashboard() {
                         {!isProUser && (
                           <div className="mt-6 p-6 rounded-xl border border-dashed border-amber-300 bg-amber-50/50 flex flex-col items-center justify-center text-center">
                             <Lock className="text-amber-500 mb-2" size={24} />
-                            <h4 className="text-sm font-bold text-slate-900">최근 전체 콘텐츠 열람 및 반응 수치는 PRO 전용입니다</h4>
+                            <h4 className="text-sm font-bold text-slate-900">최근 전체 콘텐츠 열람 및 공감/댓글 반응 수치는 PRO 전용입니다</h4>
                             <p className="text-xs text-slate-500 mt-1 max-w-md">
                               PRO 플랜을 구독하시면 포스트별 실시간 공감/댓글 반응 분석과 과거 전체 포스팅 피드를 무제한으로 열람할 수 있습니다.
                             </p>
