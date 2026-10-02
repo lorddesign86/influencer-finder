@@ -57,13 +57,13 @@ export default function BlogFinderPage() {
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('전체');
 
-  // 필터 상태
+  // 팬 수 및 일방문자 세부 필터
   const [fanRange, setFanRange] = useState<FanRange>('all');
-  const [minVisitors, setMinVisitors] = useState<string>(''); // 일일 방문자 최소
-  const [maxVisitors, setMaxVisitors] = useState<string>(''); // 일일 방문자 최대
+  const [minVisitors, setMinVisitors] = useState<string>(''); 
+  const [maxVisitors, setMaxVisitors] = useState<string>(''); 
   const [sortBy, setSortBy] = useState<BlogSortOption>('fan_desc');
 
-  const [isProUser, setIsProUser] = useState(true); // 개발용 기본 true
+  const [isProUser, setIsProUser] = useState(true);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -129,17 +129,15 @@ export default function BlogFinderPage() {
     fetchBloggers();
   }, []);
 
-  // 3. 다중 옵션 필터링 로직
+  // 3. 다중 옵션 필터링
   const filteredBloggers = useMemo(() => {
     const list = bloggers
       .filter((item) => {
-        // 검색어 필터
         const q = search.trim().toLowerCase();
         const matchesSearch = !q || 
           (item.name && item.name.toLowerCase().includes(q)) || 
           (item.handle && item.handle.toLowerCase().includes(q));
 
-        // 카테고리 필터
         const matchesCategory = selectedCategory === '전체' || 
           (item.tags && item.tags.some(t => t.includes(selectedCategory))) ||
           (item.name && item.name.includes(selectedCategory));
@@ -152,7 +150,7 @@ export default function BlogFinderPage() {
         else if (fanRange === 'over5k') matchesFan = fans >= 5000;
         else if (fanRange === 'over10k') matchesFan = fans >= 10000;
 
-        // 일일 방문자 직접 입력 범위 필터
+        // 일일 방문자 직접 입력 범위 (min ~ max)
         const visitors = item.daily_visitors || 0;
         let matchesVisitors = true;
         const minV = minVisitors ? parseInt(minVisitors, 10) : null;
@@ -194,19 +192,22 @@ export default function BlogFinderPage() {
   };
 
   return (
-    <div className="flex h-screen bg-[#f8f9fa] text-slate-800 antialiased overflow-hidden font-sans">
-      {/* 1. 사이드바 (기존 유튜브 페이지와 100% 동일) */}
-      <aside className="w-64 border-r border-slate-200 bg-white flex flex-col justify-between flex-shrink-0">
+    <div className="flex h-screen w-screen bg-[#f8f9fa] text-slate-800 antialiased overflow-hidden font-sans fixed inset-0">
+      {/* 1. 좌측 고정 사이드바 (vling 로고 + 메뉴 목록) */}
+      <aside className="w-64 border-r border-slate-200 bg-white flex flex-col justify-between flex-shrink-0 z-30">
         <div>
+          {/* 로고 영역 */}
           <div className="h-16 flex items-center px-6 border-b border-slate-100 gap-2">
             <a href="/" className="text-2xl font-black tracking-tight text-red-500">vling</a>
             <span className="text-xs bg-green-100 text-green-700 font-bold px-1.5 py-0.5 rounded">BLOG PRO</span>
           </div>
 
+          {/* 메뉴 영역 */}
           <div className="p-4 space-y-6">
             <div>
               <p className="text-xs font-semibold text-slate-400 px-3 mb-2 tracking-wider">인플루언서 탐색</p>
               <nav className="space-y-1">
+                {/* 1) 유튜버 찾기 */}
                 <a 
                   href="/"
                   className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 transition cursor-pointer"
@@ -214,7 +215,7 @@ export default function BlogFinderPage() {
                   <Search size={18} /> 유튜버 찾기
                 </a>
 
-                {/* 현재 활성 탭: 블로그인플루언서 찾기 */}
+                {/* 2) 블로그인플루언서 찾기 (활성화 상태) */}
                 <a 
                   href="/blog"
                   className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold bg-green-50 text-green-700 transition cursor-pointer"
@@ -222,6 +223,7 @@ export default function BlogFinderPage() {
                   <BookOpen size={18} /> 블로그인플루언서 찾기
                 </a>
 
+                {/* 3) 영상 라이브러리 */}
                 <button 
                   type="button"
                   onClick={() => alert('영상 라이브러리 기능 준비 중입니다.')}
@@ -229,6 +231,8 @@ export default function BlogFinderPage() {
                 >
                   <Film size={18} /> 영상 라이브러리
                 </button>
+
+                {/* 4) 즐겨찾기 */}
                 <button 
                   type="button"
                   onClick={() => alert('즐겨찾기 목록 준비 중입니다.')}
@@ -261,6 +265,7 @@ export default function BlogFinderPage() {
           </div>
         </div>
 
+        {/* PRO 플랜 토글 버튼 */}
         <div className="p-4 border-t border-slate-100">
           <button 
             type="button"
@@ -276,10 +281,10 @@ export default function BlogFinderPage() {
         </div>
       </aside>
 
-      {/* 2. 메인 컨텐츠 영역 */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* 상단 검색바 & PRO 업그레이드 헤더 */}
-        <header className="h-16 border-b border-slate-200 bg-white px-8 flex items-center justify-between flex-shrink-0">
+      {/* 2. 우측 메인 영역 (상단 검색 헤더 + 필터 바 + 목록 & 대시보드) */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#f8f9fa]">
+        {/* 상단 검색바 & PRO 버튼 헤더 */}
+        <header className="h-16 border-b border-slate-200 bg-white px-8 flex items-center justify-between flex-shrink-0 z-20">
           <div className="relative w-96 flex items-center">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
             <input 
@@ -317,7 +322,7 @@ export default function BlogFinderPage() {
           </div>
         </header>
 
-        {/* 상단 1열: 21개 카테고리 태그 바 */}
+        {/* 상단 1행: 21개 네이버 공식 카테고리 태그 바 */}
         <div className="bg-white border-b border-slate-200 px-8 py-2.5 flex items-center gap-2 overflow-x-auto flex-shrink-0">
           <span className="text-xs font-bold text-slate-400 flex items-center gap-1 flex-shrink-0">
             <Tag size={13} /> 분류:
@@ -338,10 +343,10 @@ export default function BlogFinderPage() {
           ))}
         </div>
 
-        {/* 상단 2열: 블로그 전용 다중 수치 옵션 필터 바 */}
+        {/* 상단 2행: 팬 수 구간 & 일방문자 숫자 직접입력 필터 바 */}
         <div className="bg-slate-50/80 border-b border-slate-200 px-8 py-2.5 flex flex-wrap items-center justify-between gap-4 flex-shrink-0">
           <div className="flex flex-wrap items-center gap-3 text-xs">
-            {/* 1. 인플루언서 팬 수 구간 필터 */}
+            {/* 1) 인플루언서 팬 수 필터 */}
             <div className="relative">
               <div
                 className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition ${
@@ -374,7 +379,7 @@ export default function BlogFinderPage() {
               )}
             </div>
 
-            {/* 2. 일일 방문자 수 직접 숫자 입력 필터 (Min ~ Max) */}
+            {/* 2) 일일 방문자 수 직접 숫자 입력 필터 (Min ~ Max) */}
             <div className="relative flex items-center gap-1 bg-white px-2.5 py-1 rounded-lg border border-slate-200">
               <Eye size={13} className="text-slate-400 mr-1" />
               <span className="text-slate-500 font-medium">일방문자:</span>
@@ -405,7 +410,7 @@ export default function BlogFinderPage() {
               )}
             </div>
 
-            {/* 3. 정렬 순서 필터 */}
+            {/* 3) 정렬 기준 필터 */}
             <div className="relative">
               <div
                 className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition ${
@@ -457,9 +462,9 @@ export default function BlogFinderPage() {
           </div>
         )}
 
-        {/* 3. 인플루언서 목록 & 우측 대시보드 */}
+        {/* 3. 본문 영역: 블로거 목록(좌) & 프로필·글 대시보드(우) */}
         <div className="flex-1 flex overflow-hidden">
-          {/* 채널 목록 리스트 */}
+          {/* 블로거 목록 */}
           <div className="w-1/3 border-r border-slate-200 overflow-y-auto bg-white flex flex-col justify-between">
             <div>
               <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 sticky top-0 z-10">
@@ -507,7 +512,6 @@ export default function BlogFinderPage() {
               )}
             </div>
 
-            {/* 무료 모드 하단 고정 배너 */}
             {!isProUser && (
               <div className="p-4 bg-gradient-to-t from-slate-50 to-white border-t border-slate-200 text-center sticky bottom-0">
                 <p className="text-xs text-slate-500 mb-2 font-medium">현재 무료 체험으로 <strong>20명</strong>만 표시 중입니다.</p>
@@ -526,7 +530,7 @@ export default function BlogFinderPage() {
           <div className="flex-1 overflow-y-auto p-8 bg-[#f8f9fa]">
             {selectedBlogger ? (
               <div className="max-w-4xl mx-auto space-y-6">
-                {/* 1. 상단 프로필 카드 */}
+                {/* 상단 프로필 카드 */}
                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-start justify-between">
                   <div className="flex gap-4">
                     <img 
@@ -548,7 +552,7 @@ export default function BlogFinderPage() {
                     </div>
                   </div>
 
-                  {/* 문의하기 버튼 (인플루언서 제휴/블로그로 연결) */}
+                  {/* 문의하기 버튼 (인플루언서 제휴/블로그 외부 연결) */}
                   <div className="flex gap-2">
                     <a 
                       href={selectedBlogger.contact_url || selectedBlogger.profile_url || `https://blog.naver.com/${selectedBlogger.blog_id}`}
@@ -561,7 +565,7 @@ export default function BlogFinderPage() {
                   </div>
                 </div>
 
-                {/* 2. 블로그 4대 핵심 지표 */}
+                {/* 블로그 4대 핵심 지표 */}
                 <div className="grid grid-cols-4 gap-4">
                   <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                     <p className="text-xs font-medium text-slate-400 mb-1">인플루언서 팬 수</p>
@@ -583,7 +587,7 @@ export default function BlogFinderPage() {
                   </div>
                 </div>
 
-                {/* 3. 최근 발행 블로그 글 목록 */}
+                {/* 최근 발행 블로그 글 목록 */}
                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                   <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
                     <div className="flex items-center gap-2">
