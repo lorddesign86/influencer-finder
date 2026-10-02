@@ -971,18 +971,36 @@ const matchesSearch = !rawQ || (() => {
                                   </p>
                                 </div>
 
-                                <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-100/80">
+                              <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-100/80">
                                   <span className="flex items-center gap-1">
                                     <Calendar size={12} /> {post.published_at || '최근 작성'}
                                   </span>
-                                  <div className="flex items-center gap-3">
-                                    <span className="flex items-center gap-1 text-rose-500 font-medium">
-                                      <Heart size={12} /> 공감 {(post.like_count || 0).toLocaleString()}
-                                    </span>
-                                    <span className="flex items-center gap-1 text-slate-600 font-medium">
-                                      <MessageSquare size={12} /> 댓글 {(post.comment_count || 0).toLocaleString()}
-                                    </span>
-                                  </div>
+
+                                  {/* ★ PRO 여부에 따른 공감/댓글 마스킹 처리 ★ */}
+                                  {isProUser ? (
+                                    <div className="flex items-center gap-3">
+                                      <span className="flex items-center gap-1 text-rose-500 font-medium">
+                                        <Heart size={12} /> 공감 {(post.like_count || 0).toLocaleString()}
+                                      </span>
+                                      <span className="flex items-center gap-1 text-slate-600 font-medium">
+                                        <MessageSquare size={12} /> 댓글 {(post.comment_count || 0).toLocaleString()}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-2 bg-slate-100/80 px-2 py-0.5 rounded-md border border-slate-200">
+                                      <div className="flex items-center gap-2 select-none filter blur-[3px] text-slate-400">
+                                        <span className="flex items-center gap-1 text-rose-300">
+                                          <Heart size={12} /> 999
+                                        </span>
+                                        <span className="flex items-center gap-1 text-slate-300">
+                                          <MessageSquare size={12} /> 99
+                                        </span>
+                                      </div>
+                                      <span className="text-[10px] font-bold text-amber-600 flex items-center gap-0.5 whitespace-nowrap">
+                                        <Lock size={10} /> PRO 전용
+                                      </span>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             </a>
