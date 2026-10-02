@@ -4,14 +4,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { 
   Search, Lock, Mail, ExternalLink, Video, Smartphone, 
-  BarChart3, DollarSign, Film, Bookmark, AlertCircle, PlayCircle,
-  Tag, Users, ArrowUpDown, PieChart, CheckCircle2, TrendingUp,
-  Globe2, UserCheck, ShieldCheck, Heart, MessageSquare, Calendar, Eye
+  BarChart3, DollarSign, Film, Bookmark, AlertCircle,
+  Tag, Users, ArrowUpDown, PieChart, Heart, MessageSquare, 
+  Calendar, Eye, UserPlus
 } from 'lucide-react';
 
-// ==========================================
-// 1. 타입 정의 (유튜브 & 블로그)
-// ==========================================
 interface Influencer {
   channel_id: string;
   name: string;
@@ -77,7 +74,6 @@ interface BlogPost {
   published_at: string;
 }
 
-// 카테고리 태그 정의
 const YOUTUBE_TAGS = ['전체', '맛집', '먹방', '여행', 'Vlog', 'IT', '뷰티', '패션', '게임'];
 const BLOG_CATEGORIES = [
   '전체', '여행', '패션', '뷰티', '푸드', 'IT테크', '자동차', '리빙',
@@ -87,25 +83,16 @@ const BLOG_CATEGORIES = [
 
 type SubscriberRange = 'all' | 'under10k' | '10k_100k' | '100k_500k' | 'over500k';
 type YoutubeSortOption = 'follower_desc' | 'views_desc' | 'engagement_desc';
-
-type FanRange = 'all' | 'under1k' | 'over3k' | 'over5k' | 'over10k';
 type BlogSortOption = 'fan_desc' | 'visitors_desc' | 'follower_desc' | 'likes_desc' | 'comments_desc';
 
 const shuffleArray = <T,>(array: T[]): T[] => [...array].sort(() => Math.random() - 0.5);
 
 export default function PlatformDashboard() {
-  // ★ 현재 모드: 'youtube' | 'blog'
   const [platformMode, setPlatformMode] = useState<'youtube' | 'blog'>('youtube');
-
-  // PRO 모드 (테스트용 기본 true)
   const [isProUser, setIsProUser] = useState(true);
-
-  // 공통 검색어
   const [search, setSearch] = useState('');
 
-  // ----------------------------------------------------
-  // 유튜브 상태값
-  // ----------------------------------------------------
+  // ---------------- 유튜브 상태 ----------------
   const [influencers, setInfluencers] = useState<Influencer[]>([]);
   const [selectedChannel, setSelectedChannel] = useState<Influencer | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
@@ -113,45 +100,49 @@ export default function PlatformDashboard() {
   const [ytTag, setYtTag] = useState('전체');
   const [subRange, setSubRange] = useState<SubscriberRange>('all');
   const [ytSort, setYtSort] = useState<YoutubeSortOption>('follower_desc');
-  const [videoTypeFilter, setVideoTypeFilter] = useState<'ALL' | 'VIDEO' | 'SHORTS'>('ALL');
-  const [ytTab, setYtTab] = useState<'content_split' | 'channel' | 'video' | 'audience' | 'ad_cost'>('content_split');
+  const [ytTab, setYtTab] = useState<'content_split' | 'channel' | 'video'>('content_split');
 
-  // ----------------------------------------------------
-  // 블로그 상태값
-  // ----------------------------------------------------
+  // ---------------- 블로그 상태 (5종 숫자 범위 필터) ----------------
   const [bloggers, setBloggers] = useState<BlogInfluencer[]>([]);
   const [selectedBlogger, setSelectedBlogger] = useState<BlogInfluencer | null>(null);
   const [blogPosts, setBlogPosts] = useState<BlogPost[]>([]);
   const [loadingBlogPosts, setLoadingBlogPosts] = useState(false);
   const [blogCat, setBlogCat] = useState('전체');
-  const [fanRange, setFanRange] = useState<FanRange>('all');
+
+  // 1) 팬수 범위
+  const [minFans, setMinFans] = useState('');
+  const [maxFans, setMaxFans] = useState('');
+  // 2) 이웃(팔로워)수 범위
+  const [minFollowers, setMinFollowers] = useState('');
+  const [maxFollowers, setMaxFollowers] = useState('');
+  // 3) 일방문자 범위
   const [minVisitors, setMinVisitors] = useState('');
   const [maxVisitors, setMaxVisitors] = useState('');
+  // 4) 평균 공감수 범위
+  const [minLikes, setMinLikes] = useState('');
+  const [maxLikes, setMaxLikes] = useState('');
+  // 5) 평균 댓글수 범위
+  const [minComments, setMinComments] = useState('');
+  const [maxComments, setMaxComments] = useState('');
+
   const [blogSort, setBlogSort] = useState<BlogSortOption>('fan_desc');
-
   const [loading, setLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // ==========================================
-  // 데이터 불러오기 함수들
-  // ==========================================
+  // 데이터 로드
   const fetchYoutubeChannels = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('influencers')
         .select('*')
         .order('follower_count', { ascending: false })
         .limit(2000);
-      if (error) throw error;
       if (data) {
         setInfluencers(data as Influencer[]);
         if (data.length > 0 && !selectedChannel) {
           handleSelectChannel(data[0] as Influencer);
         }
       }
-    } catch (err: any) {
-      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -166,14 +157,12 @@ export default function PlatformDashboard() {
         const parts = cleanId.split('/');
         cleanId = parts[parts.length - 1];
       }
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('influencer_posts')
         .select('*')
         .or(`channel_id.eq.${cleanId},channel_id.eq.${channel.channel_id}`)
         .limit(30);
-      if (!error && data) setPosts(data as Post[]);
-    } catch (e) {
-      setPosts([]);
+      if (data) setPosts(data as Post[]);
     } finally {
       setLoadingPosts(false);
     }
@@ -187,20 +176,17 @@ export default function PlatformDashboard() {
   const fetchBloggers = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('blog_influencers')
         .select('*')
         .order('fan_count', { ascending: false })
         .limit(2000);
-      if (error) throw error;
       if (data) {
         setBloggers(data as BlogInfluencer[]);
         if (data.length > 0 && !selectedBlogger) {
           handleSelectBlogger(data[0] as BlogInfluencer);
         }
       }
-    } catch (err: any) {
-      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -210,15 +196,13 @@ export default function PlatformDashboard() {
     if (!blogger) return;
     setLoadingBlogPosts(true);
     try {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('blog_posts')
         .select('*')
         .eq('blog_id', blogger.blog_id)
         .order('created_at', { ascending: false })
         .limit(20);
-      if (!error && data) setBlogPosts(data as BlogPost[]);
-    } catch (e) {
-      setBlogPosts([]);
+      if (data) setBlogPosts(data as BlogPost[]);
     } finally {
       setLoadingBlogPosts(false);
     }
@@ -229,13 +213,11 @@ export default function PlatformDashboard() {
     if (blogger) fetchBloggerPosts(blogger);
   };
 
-  // 초기 로딩 (유튜브 + 블로그 둘 다 준비)
   useEffect(() => {
     fetchYoutubeChannels();
     fetchBloggers();
   }, []);
 
-  // 탭 변경 시 처리
   const switchToYoutube = () => {
     setPlatformMode('youtube');
     setSearch('');
@@ -252,10 +234,7 @@ export default function PlatformDashboard() {
     }
   };
 
-  // ==========================================
-  // 필터링 연산
-  // ==========================================
-  // 유튜브 필터
+  // 유튜브 필터링
   const filteredInfluencers = useMemo(() => {
     const list = influencers
       .filter((item) => {
@@ -294,7 +273,7 @@ export default function PlatformDashboard() {
     return list.slice(0, 1000);
   }, [influencers, search, ytTag, subRange, ytSort, isProUser]);
 
-  // 블로그 필터
+  // 블로그 5종 범위 필터링 연산
   const filteredBloggers = useMemo(() => {
     const list = bloggers
       .filter((item) => {
@@ -307,21 +286,42 @@ export default function PlatformDashboard() {
           (item.tags && item.tags.some(t => t.includes(blogCat))) ||
           (item.name && item.name.includes(blogCat));
 
+        // 1) 팬수
         const fans = item.fan_count || 0;
-        let matchesFan = true;
-        if (fanRange === 'under1k') matchesFan = fans <= 1000;
-        else if (fanRange === 'over3k') matchesFan = fans >= 3000;
-        else if (fanRange === 'over5k') matchesFan = fans >= 5000;
-        else if (fanRange === 'over10k') matchesFan = fans >= 10000;
+        const minF = minFans ? parseInt(minFans, 10) : null;
+        const maxF = maxFans ? parseInt(maxFans, 10) : null;
+        if (minF !== null && !isNaN(minF) && fans < minF) return false;
+        if (maxF !== null && !isNaN(maxF) && fans > maxF) return false;
 
+        // 2) 이웃수
+        const followers = item.follower_count || 0;
+        const minFol = minFollowers ? parseInt(minFollowers, 10) : null;
+        const maxFol = maxFollowers ? parseInt(maxFollowers, 10) : null;
+        if (minFol !== null && !isNaN(minFol) && followers < minFol) return false;
+        if (maxFol !== null && !isNaN(maxFol) && followers > maxFol) return false;
+
+        // 3) 일방문자
         const visitors = item.daily_visitors || 0;
-        let matchesVisitors = true;
         const minV = minVisitors ? parseInt(minVisitors, 10) : null;
         const maxV = maxVisitors ? parseInt(maxVisitors, 10) : null;
-        if (minV !== null && !isNaN(minV) && visitors < minV) matchesVisitors = false;
-        if (maxV !== null && !isNaN(maxV) && visitors > maxV) matchesVisitors = false;
+        if (minV !== null && !isNaN(minV) && visitors < minV) return false;
+        if (maxV !== null && !isNaN(maxV) && visitors > maxV) return false;
 
-        return matchesSearch && matchesCat && matchesFan && matchesVisitors;
+        // 4) 평균 공감수
+        const likes = item.avg_likes || 0;
+        const minL = minLikes ? parseInt(minLikes, 10) : null;
+        const maxL = maxLikes ? parseInt(maxLikes, 10) : null;
+        if (minL !== null && !isNaN(minL) && likes < minL) return false;
+        if (maxL !== null && !isNaN(maxL) && likes > maxL) return false;
+
+        // 5) 평균 댓글수
+        const comments = item.avg_comments || 0;
+        const minC = minComments ? parseInt(minComments, 10) : null;
+        const maxC = maxComments ? parseInt(maxComments, 10) : null;
+        if (minC !== null && !isNaN(minC) && comments < minC) return false;
+        if (maxC !== null && !isNaN(maxC) && comments > maxC) return false;
+
+        return matchesSearch && matchesCat;
       })
       .sort((a, b) => {
         if (!isProUser) return 0;
@@ -337,48 +337,53 @@ export default function PlatformDashboard() {
       return shuffleArray(list).slice(0, 20);
     }
     return list.slice(0, 1000);
-  }, [bloggers, search, blogCat, fanRange, minVisitors, maxVisitors, blogSort, isProUser]);
+  }, [
+    bloggers, search, blogCat, 
+    minFans, maxFans, minFollowers, maxFollowers, 
+    minVisitors, maxVisitors, minLikes, maxLikes, 
+    minComments, maxComments, blogSort, isProUser
+  ]);
 
-  // 쇼츠 vs 롱폼 분석 지표
+  const resetBlogFilters = () => {
+    setBlogCat('전체');
+    setMinFans('');
+    setMaxFans('');
+    setMinFollowers('');
+    setMaxFollowers('');
+    setMinVisitors('');
+    setMaxVisitors('');
+    setMinLikes('');
+    setMaxLikes('');
+    setMinComments('');
+    setMaxComments('');
+    setSearch('');
+    setBlogSort('fan_desc');
+  };
+
   const channelAnalytics = useMemo(() => {
     if (!posts || posts.length === 0) {
-      return {
-        totalAnalyzed: 0, shortsCount: 0, videosCount: 0, shortsRatio: 0, videoRatio: 0,
-        avgShortsViews: 0, avgVideoViews: 0, estShortsCpv: 0, estVideoCpv: 0,
-        engagementRate: selectedChannel?.engagement_rate || 0, sponsoredCount: 0, sponsoredRatio: 0
-      };
+      return { totalAnalyzed: 0, shortsCount: 0, videosCount: 0, shortsRatio: 0, videoRatio: 0, avgShortsViews: 0, avgVideoViews: 0 };
     }
-    let shortsCount = 0, videosCount = 0, shortsViewSum = 0, videoViewSum = 0, totalInteractions = 0, totalViews = 0, sponsoredCount = 0;
+    let shortsCount = 0, videosCount = 0, shortsViewSum = 0, videoViewSum = 0;
     posts.forEach((p) => {
       const views = p.view_count || 0;
-      totalViews += views;
-      totalInteractions += ((p.like_count || 0) + (p.comment_count || 0));
-      if (p.is_sponsored) sponsoredCount++;
       const isShorts = p.content_type === 'SHORTS' || (p.post_url && p.post_url.includes('/shorts/'));
       if (isShorts) { shortsCount++; shortsViewSum += views; }
       else { videosCount++; videoViewSum += views; }
     });
     const totalAnalyzed = posts.length;
     const shortsRatio = totalAnalyzed > 0 ? Math.round((shortsCount / totalAnalyzed) * 100) : 0;
-    const avgShortsViews = shortsCount > 0 ? Math.round(shortsViewSum / shortsCount) : 0;
-    const avgVideoViews = videosCount > 0 ? Math.round(videoViewSum / videosCount) : 0;
     return {
       totalAnalyzed, shortsCount, videosCount, shortsRatio, videoRatio: 100 - shortsRatio,
-      avgShortsViews, avgVideoViews,
-      estShortsCpv: Math.round(avgShortsViews * 15),
-      estVideoCpv: Math.round(avgVideoViews * 35),
-      engagementRate: totalViews > 0 ? Number(((totalInteractions / totalViews) * 100).toFixed(2)) : (selectedChannel?.engagement_rate || 0),
-      sponsoredCount,
-      sponsoredRatio: totalAnalyzed > 0 ? Math.round((sponsoredCount / totalAnalyzed) * 100) : 0
+      avgShortsViews: shortsCount > 0 ? Math.round(shortsViewSum / shortsCount) : 0,
+      avgVideoViews: videosCount > 0 ? Math.round(videoViewSum / videosCount) : 0
     };
-  }, [posts, selectedChannel]);
+  }, [posts]);
 
   return (
     <div className="flex h-screen bg-[#f8f9fa] text-slate-800 antialiased overflow-hidden font-sans">
-      {/* ==========================================
-          1. 고정 좌측 사이드바 (완벽 일치)
-      ========================================== */}
-      <aside className="w-64 border-r border-slate-200 bg-white flex flex-col justify-between flex-shrink-0">
+      {/* 1. 사이드바 (단일 프레임) */}
+      <aside className="w-64 border-r border-slate-200 bg-white flex flex-col justify-between flex-shrink-0 z-20">
         <div>
           <div className="h-16 flex items-center px-6 border-b border-slate-100 gap-2">
             <span className="text-2xl font-black tracking-tight text-red-500">vling</span>
@@ -393,7 +398,6 @@ export default function PlatformDashboard() {
             <div>
               <p className="text-xs font-semibold text-slate-400 px-3 mb-2 tracking-wider">인플루언서 탐색</p>
               <nav className="space-y-1">
-                {/* 1) 유튜버 찾기 버튼 */}
                 <button 
                   type="button"
                   onClick={switchToYoutube}
@@ -404,7 +408,6 @@ export default function PlatformDashboard() {
                   <Search size={18} /> 유튜버 찾기
                 </button>
 
-                {/* 2) 블로그인플루언서 찾기 버튼 */}
                 <button 
                   type="button"
                   onClick={switchToBlog}
@@ -471,12 +474,10 @@ export default function PlatformDashboard() {
         </div>
       </aside>
 
-      {/* ==========================================
-          2. 메인 컨텐츠 영역
-      ========================================== */}
+      {/* 2. 우측 메인 프레임 */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* 상단 공통 헤더: 현재 모드에 따라 DB 검색 대상 분기 */}
-        <header className="h-16 border-b border-slate-200 bg-white px-8 flex items-center justify-between flex-shrink-0">
+        {/* 상단 헤더 */}
+        <header className="h-16 border-b border-slate-200 bg-white px-8 flex items-center justify-between flex-shrink-0 z-10">
           <div className="relative w-96 flex items-center">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
             <input 
@@ -518,9 +519,7 @@ export default function PlatformDashboard() {
           </div>
         </header>
 
-        {/* ----------------------------------------------------
-            A. 유튜브 모드일 때의 상단 필터 바
-        ---------------------------------------------------- */}
+        {/* ---------------- 유튜브 필터 바 ---------------- */}
         {platformMode === 'youtube' && (
           <div className="bg-white border-b border-slate-200 px-8 py-3 flex flex-wrap items-center justify-between gap-4 flex-shrink-0">
             <div className="flex items-center gap-1.5 overflow-x-auto py-1">
@@ -583,12 +582,10 @@ export default function PlatformDashboard() {
           </div>
         )}
 
-        {/* ----------------------------------------------------
-            B. 블로그 모드일 때의 상단 필터 바 (21개 태그 + 팬수/일방문자 직접입력)
-        ---------------------------------------------------- */}
+        {/* ---------------- 블로그 5종 숫자 범위 필터 바 ---------------- */}
         {platformMode === 'blog' && (
           <div>
-            {/* 1행: 21개 네이버 공식 카테고리 */}
+            {/* 1행: 카테고리 태그 */}
             <div className="bg-white border-b border-slate-200 px-8 py-2.5 flex items-center gap-2 overflow-x-auto flex-shrink-0">
               <span className="text-xs font-bold text-slate-400 flex items-center gap-1 flex-shrink-0">
                 <Tag size={13} /> 분류:
@@ -607,49 +604,117 @@ export default function PlatformDashboard() {
               ))}
             </div>
 
-            {/* 2행: 팬수 구간 & 일방문자 숫자 직접입력 (Min ~ Max) */}
-            <div className="bg-slate-50/80 border-b border-slate-200 px-8 py-2.5 flex flex-wrap items-center justify-between gap-4 flex-shrink-0">
-              <div className="flex flex-wrap items-center gap-3 text-xs">
-                {/* 팬수 */}
-                <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border bg-white border-slate-200">
-                  <Users size={14} className="text-slate-400" />
-                  <select
-                    value={fanRange}
-                    onChange={(e) => setFanRange(e.target.value as FanRange)}
-                    className="bg-transparent font-medium outline-none text-slate-700 cursor-pointer"
-                  >
-                    <option value="all">팬 수 전체</option>
-                    <option value="under1k">1,000명 이하</option>
-                    <option value="over3k">3,000명 이상</option>
-                    <option value="over5k">5,000명 이상</option>
-                    <option value="over10k">1만명 이상</option>
-                  </select>
-                </div>
-
-                {/* 일방문자 직접입력 */}
-                <div className="flex items-center gap-1 bg-white px-2.5 py-1 rounded-lg border border-slate-200">
-                  <Eye size={13} className="text-slate-400 mr-1" />
-                  <span className="text-slate-500 font-medium">일방문자:</span>
+            {/* 2행: 5대 핵심 지표 숫자 범위 직접 입력 필터 (팬수, 이웃수, 일방문자, 공감수, 댓글수) */}
+            <div className="bg-slate-50/80 border-b border-slate-200 px-8 py-2.5 flex flex-wrap items-center justify-between gap-3 flex-shrink-0 text-xs">
+              <div className="flex flex-wrap items-center gap-2">
+                {/* 1) 팬수 */}
+                <div className="flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-slate-200 shadow-2xs">
+                  <Users size={12} className="text-green-600 mr-0.5" />
+                  <span className="text-slate-600 font-semibold">팬:</span>
                   <input
                     type="number"
-                    placeholder="최소(명)"
-                    value={minVisitors}
-                    onChange={(e) => setMinVisitors(e.target.value)}
-                    className="w-16 px-1.5 py-0.5 border border-slate-200 rounded text-center outline-none focus:border-green-500 text-slate-700"
+                    placeholder="최소"
+                    value={minFans}
+                    onChange={(e) => setMinFans(e.target.value)}
+                    className="w-14 px-1 py-0.5 border border-slate-200 rounded text-center outline-none focus:border-green-500 text-slate-800"
                   />
                   <span className="text-slate-400">~</span>
                   <input
                     type="number"
-                    placeholder="최대(명)"
-                    value={maxVisitors}
-                    onChange={(e) => setMaxVisitors(e.target.value)}
-                    className="w-16 px-1.5 py-0.5 border border-slate-200 rounded text-center outline-none focus:border-green-500 text-slate-700"
+                    placeholder="최대"
+                    value={maxFans}
+                    onChange={(e) => setMaxFans(e.target.value)}
+                    className="w-14 px-1 py-0.5 border border-slate-200 rounded text-center outline-none focus:border-green-500 text-slate-800"
                   />
                 </div>
 
-                {/* 블로그 정렬 */}
-                <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border bg-white border-slate-200">
-                  <ArrowUpDown size={14} className="text-slate-400" />
+                {/* 2) 이웃수 */}
+                <div className="flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-slate-200 shadow-2xs">
+                  <UserPlus size={12} className="text-slate-500 mr-0.5" />
+                  <span className="text-slate-600 font-semibold">이웃:</span>
+                  <input
+                    type="number"
+                    placeholder="최소"
+                    value={minFollowers}
+                    onChange={(e) => setMinFollowers(e.target.value)}
+                    className="w-14 px-1 py-0.5 border border-slate-200 rounded text-center outline-none focus:border-green-500 text-slate-800"
+                  />
+                  <span className="text-slate-400">~</span>
+                  <input
+                    type="number"
+                    placeholder="최대"
+                    value={maxFollowers}
+                    onChange={(e) => setMaxFollowers(e.target.value)}
+                    className="w-14 px-1 py-0.5 border border-slate-200 rounded text-center outline-none focus:border-green-500 text-slate-800"
+                  />
+                </div>
+
+                {/* 3) 일방문자 */}
+                <div className="flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-slate-200 shadow-2xs">
+                  <Eye size={12} className="text-blue-500 mr-0.5" />
+                  <span className="text-slate-600 font-semibold">일방문:</span>
+                  <input
+                    type="number"
+                    placeholder="최소"
+                    value={minVisitors}
+                    onChange={(e) => setMinVisitors(e.target.value)}
+                    className="w-14 px-1 py-0.5 border border-slate-200 rounded text-center outline-none focus:border-green-500 text-slate-800"
+                  />
+                  <span className="text-slate-400">~</span>
+                  <input
+                    type="number"
+                    placeholder="최대"
+                    value={maxVisitors}
+                    onChange={(e) => setMaxVisitors(e.target.value)}
+                    className="w-14 px-1 py-0.5 border border-slate-200 rounded text-center outline-none focus:border-green-500 text-slate-800"
+                  />
+                </div>
+
+                {/* 4) 공감수 */}
+                <div className="flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-slate-200 shadow-2xs">
+                  <Heart size={12} className="text-rose-500 mr-0.5" />
+                  <span className="text-slate-600 font-semibold">공감:</span>
+                  <input
+                    type="number"
+                    placeholder="최소"
+                    value={minLikes}
+                    onChange={(e) => setMinLikes(e.target.value)}
+                    className="w-14 px-1 py-0.5 border border-slate-200 rounded text-center outline-none focus:border-green-500 text-slate-800"
+                  />
+                  <span className="text-slate-400">~</span>
+                  <input
+                    type="number"
+                    placeholder="최대"
+                    value={maxLikes}
+                    onChange={(e) => setMaxLikes(e.target.value)}
+                    className="w-14 px-1 py-0.5 border border-slate-200 rounded text-center outline-none focus:border-green-500 text-slate-800"
+                  />
+                </div>
+
+                {/* 5) 댓글수 */}
+                <div className="flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-slate-200 shadow-2xs">
+                  <MessageSquare size={12} className="text-amber-500 mr-0.5" />
+                  <span className="text-slate-600 font-semibold">댓글:</span>
+                  <input
+                    type="number"
+                    placeholder="최소"
+                    value={minComments}
+                    onChange={(e) => setMinComments(e.target.value)}
+                    className="w-14 px-1 py-0.5 border border-slate-200 rounded text-center outline-none focus:border-green-500 text-slate-800"
+                  />
+                  <span className="text-slate-400">~</span>
+                  <input
+                    type="number"
+                    placeholder="최대"
+                    value={maxComments}
+                    onChange={(e) => setMaxComments(e.target.value)}
+                    className="w-14 px-1 py-0.5 border border-slate-200 rounded text-center outline-none focus:border-green-500 text-slate-800"
+                  />
+                </div>
+
+                {/* 정렬 드롭다운 */}
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border bg-white border-slate-200">
+                  <ArrowUpDown size={12} className="text-slate-400" />
                   <select
                     value={blogSort}
                     onChange={(e) => setBlogSort(e.target.value as BlogSortOption)}
@@ -657,18 +722,18 @@ export default function PlatformDashboard() {
                   >
                     <option value="fan_desc">인플루언서 팬 많은 순</option>
                     <option value="visitors_desc">일일 방문자 많은 순</option>
-                    <option value="follower_desc">이웃(팔로워) 많은 순</option>
+                    <option value="follower_desc">이웃 많은 순</option>
                     <option value="likes_desc">평균 공감 많은 순</option>
                     <option value="comments_desc">평균 댓글 많은 순</option>
                   </select>
                 </div>
               </div>
 
-              {(blogCat !== '전체' || fanRange !== 'all' || minVisitors !== '' || maxVisitors !== '' || search !== '') && (
+              {(blogCat !== '전체' || minFans || maxFans || minFollowers || maxFollowers || minVisitors || maxVisitors || minLikes || maxLikes || minComments || maxComments || search) && (
                 <button
                   type="button"
-                  onClick={() => { setBlogCat('전체'); setFanRange('all'); setMinVisitors(''); setMaxVisitors(''); setSearch(''); }}
-                  className="text-xs text-green-600 hover:underline font-semibold cursor-pointer"
+                  onClick={resetBlogFilters}
+                  className="text-xs text-green-600 hover:underline font-semibold cursor-pointer whitespace-nowrap"
                 >
                   필터 초기화
                 </button>
@@ -677,16 +742,11 @@ export default function PlatformDashboard() {
           </div>
         )}
 
-        {/* ----------------------------------------------------
-            3. 본문 뷰 (유튜브 vs 블로그 스위칭)
-        ---------------------------------------------------- */}
+        {/* ---------------- 본문 뷰 ---------------- */}
         <div className="flex-1 flex overflow-hidden">
-          {/* =======================
-              유튜브 본문 레이아웃
-          ======================= */}
+          {/* 유튜브 뷰 */}
           {platformMode === 'youtube' && (
             <>
-              {/* 채널 목록 */}
               <div className="w-1/3 border-r border-slate-200 overflow-y-auto bg-white flex flex-col justify-between">
                 <div>
                   <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 sticky top-0 z-10">
@@ -727,11 +787,9 @@ export default function PlatformDashboard() {
                 </div>
               </div>
 
-              {/* 우측 유튜브 대시보드 */}
               <div className="flex-1 overflow-y-auto p-8 bg-[#f8f9fa]">
                 {selectedChannel ? (
                   <div className="max-w-4xl mx-auto space-y-6">
-                    {/* 상단 프로필 카드 */}
                     <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-start justify-between">
                       <div className="flex gap-4">
                         <img 
@@ -747,7 +805,7 @@ export default function PlatformDashboard() {
                           <p className="text-sm text-slate-400 mt-0.5">{selectedChannel.handle}</p>
                           <div className="flex flex-wrap gap-1.5 mt-3">
                             {(selectedChannel.tags || []).map((t, idx) => (
-                              <span key={idx} className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-medium">#{t}</span>
+                              <span key={idx} className="text-xs bg-slate-100 text-slate-600 px-2.5 py-0.5 rounded-full font-medium">#{t}</span>
                             ))}
                           </div>
                         </div>
@@ -761,7 +819,6 @@ export default function PlatformDashboard() {
                       </button>
                     </div>
 
-                    {/* 탭 네비게이션 */}
                     <div className="flex gap-2 border-b border-slate-200 pb-2">
                       {[
                         { id: 'content_split', label: '📊 쇼츠 vs 롱폼 분리 통계' },
@@ -843,12 +900,9 @@ export default function PlatformDashboard() {
             </>
           )}
 
-          {/* =======================
-              블로그 본문 레이아웃 (요청 사항 100% 반영)
-          ======================= */}
+          {/* 블로그 뷰 */}
           {platformMode === 'blog' && (
             <>
-              {/* 블로거 목록 */}
               <div className="w-1/3 border-r border-slate-200 overflow-y-auto bg-white flex flex-col justify-between">
                 <div>
                   <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 sticky top-0 z-10">
@@ -892,11 +946,9 @@ export default function PlatformDashboard() {
                 </div>
               </div>
 
-              {/* 우측 블로그 대시보드 */}
               <div className="flex-1 overflow-y-auto p-8 bg-[#f8f9fa]">
                 {selectedBlogger ? (
                   <div className="max-w-4xl mx-auto space-y-6">
-                    {/* 상단 블로거 프로필 카드 */}
                     <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-start justify-between">
                       <div className="flex gap-4">
                         <img 
@@ -918,7 +970,6 @@ export default function PlatformDashboard() {
                         </div>
                       </div>
 
-                      {/* 문의하기 버튼 (인플루언서 링크 새창 이동) */}
                       <a 
                         href={selectedBlogger.contact_url || selectedBlogger.profile_url || `https://blog.naver.com/${selectedBlogger.blog_id}`}
                         target="_blank"
@@ -929,7 +980,6 @@ export default function PlatformDashboard() {
                       </a>
                     </div>
 
-                    {/* 블로그 4대 지표 카드 */}
                     <div className="grid grid-cols-4 gap-4">
                       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                         <p className="text-xs font-medium text-slate-400 mb-1">인플루언서 팬 수</p>
@@ -951,7 +1001,6 @@ export default function PlatformDashboard() {
                       </div>
                     </div>
 
-                    {/* 최신 블로그 포스트 카드 (좌측 대표 사진 + 우측 제목, 요약, 날짜, 공감/댓글) */}
                     <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                       <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
                         <div className="flex items-center gap-2">
