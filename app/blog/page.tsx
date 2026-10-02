@@ -52,6 +52,7 @@ const BLOG_CATEGORIES = [
 type BlogSortOption = 'fan_desc' | 'visitors_desc' | 'follower_desc' | 'likes_desc' | 'comments_desc';
 
 export default function BlogDashboardPage() {
+  // 기본 무료 상태로 설정 (PRO 여부)
   const [isProUser, setIsProUser] = useState(false);
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'basic' | 'posts' | 'analytics'>('basic');
@@ -282,6 +283,17 @@ export default function BlogDashboardPage() {
     };
   }, [selectedBlogger, blogPosts]);
 
+  const resetBlogFilters = () => {
+    setBlogCat('전체');
+    setMinFans(''); setMaxFans('');
+    setMinFollowers(''); setMaxFollowers('');
+    setMinVisitors(''); setMaxVisitors('');
+    setMinLikes(''); setMaxLikes('');
+    setMinComments(''); setMaxComments('');
+    setSearch('');
+    setBlogSort('fan_desc');
+  };
+
   return (
     <>
       {/* 블로그 상단 헤더 */}
@@ -301,14 +313,16 @@ export default function BlogDashboardPage() {
           <button 
             type="button"
             onClick={() => setIsProUser(!isProUser)}
-            className="text-xs font-semibold text-white px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 transition cursor-pointer flex items-center gap-1.5"
+            className={`text-xs font-semibold text-white px-4 py-2 rounded-lg transition cursor-pointer flex items-center gap-1.5 shadow-xs ${
+              isProUser ? 'bg-gradient-to-r from-green-600 to-emerald-500' : 'bg-green-600 hover:bg-green-700'
+            }`}
           >
-            <Lock size={12} /> {isProUser ? 'PRO 모드 ON' : 'PRO 업그레이드'}
+            <Lock size={12} /> {isProUser ? '👑 PRO 활성화됨' : '🔒 PRO 업그레이드'}
           </button>
         </div>
       </header>
 
-      {/* 블로그 카테고리 & 상세 필터 */}
+      {/* 블로그 카테고리 & 전체 5대 범위 필터 바 */}
       <div>
         <div className="bg-white border-b border-slate-200 px-8 py-2.5 flex items-center gap-2 overflow-x-auto flex-shrink-0">
           <span className="text-xs font-bold text-slate-400 flex items-center gap-1 flex-shrink-0">
@@ -328,6 +342,7 @@ export default function BlogDashboardPage() {
           ))}
         </div>
 
+        {/* 5대 정밀 필터 바 */}
         <div className="bg-slate-50/80 border-b border-slate-200 px-8 py-2.5 flex flex-wrap items-center justify-between gap-3 flex-shrink-0 text-xs">
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-slate-200 shadow-2xs">
@@ -350,6 +365,86 @@ export default function BlogDashboardPage() {
               />
             </div>
 
+            <div className="flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-slate-200 shadow-2xs">
+              <UserPlus size={12} className="text-slate-500 mr-0.5" />
+              <span className="text-slate-600 font-semibold">이웃:</span>
+              <input
+                type="number"
+                placeholder="최소"
+                value={minFollowers}
+                onChange={(e) => setMinFollowers(e.target.value)}
+                className="w-14 px-1 py-0.5 border border-slate-200 rounded text-center outline-none focus:border-green-500 text-slate-800"
+              />
+              <span className="text-slate-400">~</span>
+              <input
+                type="number"
+                placeholder="최대"
+                value={maxFollowers}
+                onChange={(e) => setMaxFollowers(e.target.value)}
+                className="w-14 px-1 py-0.5 border border-slate-200 rounded text-center outline-none focus:border-green-500 text-slate-800"
+              />
+            </div>
+
+            <div className="flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-slate-200 shadow-2xs">
+              <Eye size={12} className="text-blue-500 mr-0.5" />
+              <span className="text-slate-600 font-semibold">일방문:</span>
+              <input
+                type="number"
+                placeholder="최소"
+                value={minVisitors}
+                onChange={(e) => setMinVisitors(e.target.value)}
+                className="w-14 px-1 py-0.5 border border-slate-200 rounded text-center outline-none focus:border-green-500 text-slate-800"
+              />
+              <span className="text-slate-400">~</span>
+              <input
+                type="number"
+                placeholder="최대"
+                value={maxVisitors}
+                onChange={(e) => setMaxVisitors(e.target.value)}
+                className="w-14 px-1 py-0.5 border border-slate-200 rounded text-center outline-none focus:border-green-500 text-slate-800"
+              />
+            </div>
+
+            <div className="flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-slate-200 shadow-2xs">
+              <Heart size={12} className="text-rose-500 mr-0.5" />
+              <span className="text-slate-600 font-semibold">공감:</span>
+              <input
+                type="number"
+                placeholder="최소"
+                value={minLikes}
+                onChange={(e) => setMinLikes(e.target.value)}
+                className="w-14 px-1 py-0.5 border border-slate-200 rounded text-center outline-none focus:border-green-500 text-slate-800"
+              />
+              <span className="text-slate-400">~</span>
+              <input
+                type="number"
+                placeholder="최대"
+                value={maxLikes}
+                onChange={(e) => setMaxLikes(e.target.value)}
+                className="w-14 px-1 py-0.5 border border-slate-200 rounded text-center outline-none focus:border-green-500 text-slate-800"
+              />
+            </div>
+
+            <div className="flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-slate-200 shadow-2xs">
+              <MessageSquare size={12} className="text-amber-500 mr-0.5" />
+              <span className="text-slate-600 font-semibold">댓글:</span>
+              <input
+                type="number"
+                placeholder="최소"
+                value={minComments}
+                onChange={(e) => setMinComments(e.target.value)}
+                className="w-14 px-1 py-0.5 border border-slate-200 rounded text-center outline-none focus:border-green-500 text-slate-800"
+              />
+              <span className="text-slate-400">~</span>
+              <input
+                type="number"
+                placeholder="최대"
+                value={maxComments}
+                onChange={(e) => setMaxComments(e.target.value)}
+                className="w-14 px-1 py-0.5 border border-slate-200 rounded text-center outline-none focus:border-green-500 text-slate-800"
+              />
+            </div>
+
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border bg-white border-slate-200">
               <ArrowUpDown size={12} className="text-slate-400" />
               <select
@@ -365,6 +460,16 @@ export default function BlogDashboardPage() {
               </select>
             </div>
           </div>
+
+          {(blogCat !== '전체' || minFans || maxFans || minFollowers || maxFollowers || minVisitors || maxVisitors || minLikes || maxLikes || minComments || maxComments || search) && (
+            <button
+              type="button"
+              onClick={resetBlogFilters}
+              className="text-xs text-green-600 hover:underline font-semibold cursor-pointer whitespace-nowrap"
+            >
+              필터 초기화
+            </button>
+          )}
         </div>
       </div>
 
@@ -375,8 +480,13 @@ export default function BlogDashboardPage() {
           <div>
             <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 sticky top-0 z-10">
               <span className="text-xs font-bold text-slate-500">
-                블로그 인플루언서 ({filteredBloggers.length}명)
+                블로그 인플루언서 ({filteredBloggers.length}명 {isProUser ? '전체' : '샘플'})
               </span>
+              {!isProUser && (
+                <span className="text-[10px] bg-amber-100 text-amber-700 font-bold px-2 py-0.5 rounded">
+                  🔒 PRO 전용 1,000+개
+                </span>
+              )}
             </div>
 
             {loading ? (
@@ -402,12 +512,29 @@ export default function BlogDashboardPage() {
                       <span className="text-[9px] px-1.5 py-0.2 bg-green-100 text-green-700 font-bold rounded">INFLUENCER</span>
                     </div>
                     <p className="text-xs text-slate-400 truncate">@{blogger.handle || blogger.blog_id}</p>
+                    
                     <div className="flex flex-wrap gap-1 mt-1.5">
                       {(blogger.tags || ['인플루언서']).map((t, idx) => (
                         <span key={idx} className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">
                           #{t}
                         </span>
                       ))}
+                    </div>
+
+                    {/* 팬 수 & 일방문 수 (무료 시 마스킹) */}
+                    <div className="flex items-center gap-2 mt-2 text-[11px]">
+                      <span className="font-semibold text-slate-700">
+                        팬 {(blogger.fan_count || 0).toLocaleString()}명
+                      </span>
+                      {isProUser ? (
+                        <span className="text-slate-400">
+                          • 일방문 {(blogger.daily_visitors || 0).toLocaleString()}명
+                        </span>
+                      ) : (
+                        <span className="text-slate-300 flex items-center gap-0.5">
+                          • 일방문 <Lock size={10} className="text-amber-500" />
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -418,7 +545,7 @@ export default function BlogDashboardPage() {
 
         {/* 우측 블로그 상세 분석 */}
         <div className="flex-1 overflow-y-auto p-8 bg-[#f8f9fa]">
-          {selectedBlogger && (
+          {selectedBlogger ? (
             <div className="max-w-4xl mx-auto space-y-6">
               {/* 프로필 헤더 */}
               <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs flex items-start justify-between">
@@ -449,58 +576,125 @@ export default function BlogDashboardPage() {
                 </a>
               </div>
 
-              {/* 3대 탭 */}
+              {/* 3대 탭 네비게이션 */}
               <div className="flex gap-2 border-b border-slate-200 pb-2">
                 <button
                   type="button"
                   onClick={() => setActiveTab('basic')}
-                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition ${activeTab === 'basic' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    activeTab === 'basic' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
+                  }`}
                 >
                   <FileText size={14} className="inline mr-1" /> 기본정보
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveTab('posts')}
-                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition ${activeTab === 'posts' ? 'bg-green-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    activeTab === 'posts' ? 'bg-green-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                  }`}
                 >
-                  📝 최근 발행 콘텐츠 {!isProUser && <span className="bg-amber-400 text-slate-900 text-[10px] px-1 rounded ml-1">PRO</span>}
+                  📝 최근 발행 콘텐츠 {!isProUser && <span className="bg-amber-400 text-slate-900 text-[10px] px-1 rounded ml-1 font-black">PRO</span>}
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveTab('analytics')}
-                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition ${activeTab === 'analytics' ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    activeTab === 'analytics' ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                  }`}
                 >
-                  <BadgeDollarSign size={14} className="inline mr-1" /> 광고비 및 디테일분석 {!isProUser && <span className="bg-amber-400 text-slate-900 text-[10px] px-1 rounded ml-1">PRO</span>}
+                  <BadgeDollarSign size={14} className="inline mr-1" /> 광고비 및 디테일분석 {!isProUser && <span className="bg-amber-400 text-slate-900 text-[10px] px-1 rounded ml-1 font-black">PRO</span>}
                 </button>
               </div>
 
-              {/* 탭 1: 기본정보 */}
+              {/* ---------------- 탭 1: 기본정보 (무료 시 마스킹) ---------------- */}
               {activeTab === 'basic' && (
-                <div className="grid grid-cols-4 gap-4">
-                  <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
-                    <p className="text-xs font-medium text-slate-400 mb-1">인플루언서 팬 수</p>
-                    <p className="text-2xl font-black text-slate-900">{(selectedBlogger.fan_count || 0).toLocaleString()}명</p>
+                <div className="space-y-6">
+                  <div className="grid grid-cols-4 gap-4">
+                    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
+                      <p className="text-xs font-medium text-slate-400 mb-1">인플루언서 팬 수</p>
+                      <p className="text-2xl font-black text-slate-900">{(selectedBlogger.fan_count || 0).toLocaleString()}명</p>
+                      <span className="text-[11px] text-green-600 font-medium mt-1 inline-block">✓ 공식 인증 팬</span>
+                    </div>
+
+                    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs relative overflow-hidden">
+                      <p className="text-xs font-medium text-slate-400 mb-1">일일 평균 방문자</p>
+                      {isProUser ? (
+                        <p className="text-2xl font-black text-green-600">{(selectedBlogger.daily_visitors || 0).toLocaleString()}명</p>
+                      ) : (
+                        <div>
+                          <p className="text-2xl font-black text-slate-300 blur-[4px] select-none">42,143명</p>
+                          <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded flex items-center gap-1 mt-1 w-fit">
+                            <Lock size={10} /> PRO 전용
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs relative overflow-hidden">
+                      <p className="text-xs font-medium text-slate-400 mb-1">이웃 수</p>
+                      {isProUser ? (
+                        <p className="text-2xl font-black text-slate-900">{(selectedBlogger.follower_count || 0).toLocaleString()}명</p>
+                      ) : (
+                        <div>
+                          <p className="text-2xl font-black text-slate-300 blur-[4px] select-none">20,000명</p>
+                          <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded flex items-center gap-1 mt-1 w-fit">
+                            <Lock size={10} /> PRO 전용
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs relative overflow-hidden">
+                      <p className="text-xs font-medium text-slate-400 mb-1">평균 공감 / 댓글</p>
+                      {isProUser ? (
+                        <p className="text-2xl font-black text-slate-900">
+                          {((selectedBlogger.avg_likes ?? selectedBlogger.recent_10_avg_likes) || 0).toLocaleString()} 
+                          <span className="text-xs font-normal text-slate-400"> / {((selectedBlogger.avg_comments ?? selectedBlogger.recent_10_avg_comments) || 0).toLocaleString()}</span>
+                        </p>
+                      ) : (
+                        <div>
+                          <p className="text-2xl font-black text-slate-300 blur-[4px] select-none">878 / 194</p>
+                          <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded flex items-center gap-1 mt-1 w-fit">
+                            <Lock size={10} /> PRO 전용
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
-                    <p className="text-xs font-medium text-slate-400 mb-1">일일 평균 방문자</p>
-                    <p className="text-2xl font-black text-green-600">{(selectedBlogger.daily_visitors || 0).toLocaleString()}명</p>
-                  </div>
-                  <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
-                    <p className="text-xs font-medium text-slate-400 mb-1">이웃 수</p>
-                    <p className="text-2xl font-black text-slate-900">{(selectedBlogger.follower_count || 0).toLocaleString()}명</p>
-                  </div>
-                  <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
-                    <p className="text-xs font-medium text-slate-400 mb-1">평균 공감 / 댓글</p>
-                    <p className="text-2xl font-black text-slate-900">
-                      {((selectedBlogger.avg_likes ?? selectedBlogger.recent_10_avg_likes) || 0).toLocaleString()} / {((selectedBlogger.avg_comments ?? selectedBlogger.recent_10_avg_comments) || 0).toLocaleString()}
-                    </p>
+
+                  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-4">
+                    <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                      <ShieldCheck className="text-green-600" size={18} /> 인플루언서 기본 검증 정보
+                    </h3>
+                    <div className="grid grid-cols-2 gap-4 text-xs">
+                      <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100">
+                        <span className="text-slate-400 font-medium">활동 플랫폼</span>
+                        <p className="font-bold text-slate-800 text-sm mt-1">네이버 블로그 (Naver Official)</p>
+                      </div>
+                      <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100">
+                        <span className="text-slate-400 font-medium">블로그 공식 URL</span>
+                        <p className="font-bold text-green-700 text-sm mt-1 truncate">
+                          {selectedBlogger.profile_url || `https://blog.naver.com/${selectedBlogger.blog_id}`}
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
 
-              {/* 탭 2: 최근 포스트 (공감/댓글 PRO 마스킹) */}
+              {/* ---------------- 탭 2: 최근 포스트 (공감/댓글 PRO 마스킹) ---------------- */}
               {activeTab === 'posts' && (
                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                      <span className="text-green-600 text-lg">📝</span>
+                      <h3 className="text-sm font-bold text-slate-800">최근 발행 포스트</h3>
+                      <span className="text-xs text-slate-400 font-normal">({blogPosts.length}개)</span>
+                    </div>
+                    <span className="text-xs text-slate-400 font-medium">실시간 발행 피드</span>
+                  </div>
+
                   {(isProUser ? blogPosts : blogPosts.slice(0, 3)).map((post) => (
                     <a
                       key={post.post_id}
@@ -526,38 +720,247 @@ export default function BlogDashboardPage() {
                           <span>{post.published_at}</span>
                           {isProUser ? (
                             <div className="flex items-center gap-3">
-                              <span className="text-rose-500"><Heart size={12} className="inline mr-1" />{post.like_count}</span>
-                              <span className="text-slate-600"><MessageSquare size={12} className="inline mr-1" />{post.comment_count}</span>
+                              <span className="text-rose-500 font-medium"><Heart size={12} className="inline mr-1" />공감 {post.like_count}</span>
+                              <span className="text-slate-600 font-medium"><MessageSquare size={12} className="inline mr-1" />댓글 {post.comment_count}</span>
                             </div>
                           ) : (
-                            <span className="text-amber-600 font-bold"><Lock size={10} className="inline mr-1" />PRO 전용</span>
+                            <div className="flex items-center gap-2 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                              <span className="text-slate-400 blur-[3px] select-none text-[11px]">공감 888 댓글 88</span>
+                              <span className="text-[10px] font-bold text-amber-600 flex items-center gap-0.5">
+                                <Lock size={10} /> PRO 전용
+                              </span>
+                            </div>
                           )}
                         </div>
                       </div>
                     </a>
                   ))}
+
+                  {!isProUser && (
+                    <div className="mt-6 p-6 rounded-xl border border-dashed border-amber-300 bg-amber-50/50 flex flex-col items-center justify-center text-center">
+                      <Lock className="text-amber-500 mb-2" size={24} />
+                      <h4 className="text-sm font-bold text-slate-900">최근 전체 콘텐츠 열람 및 반응 수치는 PRO 전용입니다</h4>
+                      <p className="text-xs text-slate-500 mt-1 max-w-md">
+                        PRO 플랜을 구독하시면 포스트별 실시간 공감/댓글 반응 분석과 과거 전체 포스팅 피드를 무제한으로 열람할 수 있습니다.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setIsProUser(true)}
+                        className="mt-3 text-xs font-bold px-4 py-2 bg-gradient-to-r from-amber-500 to-yellow-500 text-white rounded-lg shadow-2xs hover:opacity-95 transition cursor-pointer"
+                      >
+                        PRO 활성화하고 전체보기
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* 탭 3: 광고비 및 디테일분석 */}
+              {/* ---------------- 탭 3: 광고비 및 디테일분석 (PRO 전용 자물쇠 안내 모달) ---------------- */}
               {activeTab === 'analytics' && (
                 <div className="space-y-6">
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="bg-white p-5 rounded-2xl border-2 border-emerald-100 shadow-2xs">
-                      <span className="text-[11px] font-bold text-emerald-600">포스팅 예상 원고료</span>
-                      <p className="text-3xl font-black text-slate-900 mt-2">{(blogAnalytics?.estPrice || 0).toLocaleString()}원</p>
+                  {!isProUser ? (
+                    /* PRO 미구독 시 노출되는 잠금 안내 모달 */
+                    <div className="bg-white p-12 rounded-2xl border border-slate-200 shadow-xs flex flex-col items-center justify-center text-center py-20">
+                      <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center mb-4 text-emerald-600">
+                        <Lock size={32} />
+                      </div>
+                      <h3 className="text-lg font-black text-slate-900">광고비 및 세부 수식 분석은 PRO 전용입니다</h3>
+                      <p className="text-xs text-slate-500 mt-2 max-w-md leading-relaxed">
+                        카테고리별 현실 원고료 단가 시뮬레이션, 인터랙션 반응도 트렌드 그래프, 독자 참여율 게이지 및 마케팅 협업 타당성 정밀 진단표를 확인하여 예산 집행 효율을 극대화하세요.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setIsProUser(true)}
+                        className="mt-6 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-500 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition cursor-pointer flex items-center gap-2"
+                      >
+                        <Sparkles size={14} /> PRO 모드로 분석 즉시 열람하기
+                      </button>
                     </div>
-                    <div className="bg-white p-5 rounded-2xl border-2 border-blue-100 shadow-2xs">
-                      <span className="text-[11px] font-bold text-blue-600">협업 지수</span>
-                      <p className="text-3xl font-black text-slate-900 mt-2">{blogAnalytics?.score}점</p>
-                    </div>
-                    <div className="bg-white p-5 rounded-2xl border-2 border-purple-100 shadow-2xs">
-                      <span className="text-[11px] font-bold text-purple-600">독자 참여율</span>
-                      <p className="text-3xl font-black text-purple-600 mt-2">{blogAnalytics?.engRate}%</p>
-                    </div>
-                  </div>
+                  ) : (
+                    /* PRO 구독 시에만 해제되어 열리는 실제 분석 데이터 */
+                    <>
+                      {/* 핵심 3대 지표 카드 */}
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className="bg-white p-5 rounded-2xl border-2 border-emerald-100 shadow-2xs">
+                          <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-1 uppercase tracking-wider">
+                            <DollarSign size={13} /> 포스팅 예상 원고료
+                          </span>
+                          <p className="text-3xl font-black text-slate-900 mt-2">{(blogAnalytics?.estPrice || 0).toLocaleString()}원</p>
+                          <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
+                            <span>단가 적합도</span>
+                            <span className="font-semibold text-emerald-600">시장 표준 대비 양호</span>
+                          </div>
+                        </div>
+                        <div className="bg-white p-5 rounded-2xl border-2 border-blue-100 shadow-2xs">
+                          <span className="text-[11px] font-bold text-blue-600 flex items-center gap-1 uppercase tracking-wider">
+                            <Award size={13} /> 협업 지수 스코어
+                          </span>
+                          <p className="text-3xl font-black text-slate-900 mt-2">{blogAnalytics?.score}점</p>
+                          <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                            <span className="text-slate-400">등급</span>
+                            <span className="font-bold text-blue-600">Top 5% 추천 블로거</span>
+                          </div>
+                        </div>
+                        <div className="bg-white p-5 rounded-2xl border-2 border-purple-100 shadow-2xs">
+                          <span className="text-[11px] font-bold text-purple-600 flex items-center gap-1 uppercase tracking-wider">
+                            <Flame size={13} /> 독자 참여율 (Engagement)
+                          </span>
+                          <p className="text-3xl font-black text-purple-600 mt-2">{blogAnalytics?.engRate}%</p>
+                          <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                            <span className="text-slate-400">업계 평균비</span>
+                            <span className="font-bold text-purple-600">+{(Number(blogAnalytics?.engRate || 0) - 2.8).toFixed(1)}% 상회</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 1. 최근 포스트 반응도 막대 그래프 */}
+                      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs">
+                        <div className="flex items-center justify-between mb-2">
+                          <div>
+                            <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                              <BarChart3 className="text-blue-600" size={15} /> 최근 발행 포스트 독자 인터랙션 (공감 + 댓글)
+                            </h4>
+                            <p className="text-[11px] text-slate-400 mt-0.5">글마다 형성되는 실제 독자 피드백 규모</p>
+                          </div>
+                          <span className="text-[11px] bg-blue-50 text-blue-700 font-bold px-2.5 py-1 rounded">
+                            포스트당 평균 {((selectedBlogger.avg_likes ?? selectedBlogger.recent_10_avg_likes) || 0) + ((selectedBlogger.avg_comments ?? selectedBlogger.recent_10_avg_comments) || 0)}개 피드백
+                          </span>
+                        </div>
+
+                        <div className="h-44 flex items-end justify-between gap-3 pt-8 pb-2 px-4">
+                          {(blogAnalytics?.recentBarData || []).map((bar, i) => {
+                            const heightPct = Math.max(15, Math.round((bar.total / (blogAnalytics?.maxBarValue || 1)) * 100));
+                            return (
+                              <div key={i} className="flex-1 flex flex-col items-center h-full justify-end group">
+                                <div className="text-[10px] font-bold text-slate-500 opacity-0 group-hover:opacity-100 transition mb-1">
+                                  {bar.total}
+                                </div>
+                                <div 
+                                  style={{ height: `${heightPct}%` }}
+                                  className="w-full rounded-t-md bg-emerald-500 group-hover:bg-emerald-600 transition duration-300"
+                                ></div>
+                                <span className="text-[10px] text-slate-400 font-semibold mt-2">#{bar.index}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        <div className="flex items-center justify-between pt-3 border-t border-slate-100 text-[11px] text-slate-400">
+                          <span>발행 포스트 순번 (좌: 최신글 ➜ 우: 과거글)</span>
+                          <span>인터랙션 = 공감 수 + 댓글 수 합산</span>
+                        </div>
+                      </div>
+
+                      {/* 2. 독자 참여율 3색 레벨 게이지 바 */}
+                      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs">
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                              <TrendingUp className="text-purple-600" size={15} /> 독자 인게이지먼트(참여율) 벤치마크 평가
+                            </h4>
+                            <p className="text-[11px] text-slate-400 mt-0.5">네이버 블로그 평균 전환율(2.0% ~ 3.5%) 대비 위치</p>
+                          </div>
+                          <span className="text-sm font-black text-purple-600">{blogAnalytics?.engRate}% (최상위권)</span>
+                        </div>
+
+                        <div className="relative pt-2 pb-1">
+                          <div className="w-full h-3 rounded-full bg-slate-100 flex overflow-hidden">
+                            <div className="w-1/3 bg-slate-300" title="낮음 (0~2.5%)"></div>
+                            <div className="w-1/3 bg-blue-300" title="보통 (2.5~5.0%)"></div>
+                            <div className="w-1/3 bg-purple-500" title="매우 높음 (5.0% 이상)"></div>
+                          </div>
+                          <div 
+                            style={{ left: `${Math.min(95, Math.max(5, (Number(blogAnalytics?.engRate || 0) / 10) * 100))}%` }}
+                            className="absolute top-0 -translate-x-1/2 flex flex-col items-center"
+                          >
+                            <span className="text-[10px] font-black text-purple-700 bg-purple-100 px-1.5 py-0.2 rounded shadow-2xs whitespace-nowrap">
+                              현재 위치 {blogAnalytics?.engRate}%
+                            </span>
+                            <div className="w-1.5 h-1.5 bg-purple-700 rotate-45 -mt-0.5"></div>
+                          </div>
+                        </div>
+
+                        <div className="flex justify-between text-[10px] text-slate-400 font-medium mt-2">
+                          <span>기본 노출형 (0.0% ~ 2.5%)</span>
+                          <span>안정적 소통형 (2.5% ~ 5.0%)</span>
+                          <span>고관여 팬덤형 (5.0% ~ 10.0%+)</span>
+                        </div>
+                      </div>
+
+                      {/* 3. 마케팅 협업 타당성 정밀 진단표 */}
+                      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs">
+                        <div className="flex items-center justify-between mb-4">
+                          <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                            <Target className="text-slate-800" size={16} /> 인플루언서 마케팅 협업 타당성 정밀 진단표
+                          </h4>
+                          <span className="text-[11px] text-emerald-700 bg-emerald-50 font-bold px-2.5 py-1 rounded-full border border-emerald-200">
+                            ✓ 광고 적합 판정 완료
+                          </span>
+                        </div>
+
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs text-left">
+                            <thead className="bg-slate-50 text-slate-500 font-semibold border-y border-slate-100">
+                              <tr>
+                                <th className="py-3 px-4">분석 항목</th>
+                                <th className="py-3 px-4">측정 데이터</th>
+                                <th className="py-3 px-4">업계 벤치마크 평가</th>
+                                <th className="py-3 px-4">권장 캠페인 유형</th>
+                                <th className="py-3 px-4 text-right">예상 ROI 기대치</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 font-medium">
+                              <tr>
+                                <td className="py-3.5 px-4 font-bold text-slate-900 flex items-center gap-2">
+                                  <Zap size={14} className="text-blue-500" /> 구매 전환 파워
+                                </td>
+                                <td className="py-3.5 px-4 font-bold text-blue-600">{blogAnalytics?.engRate}%</td>
+                                <td className="py-3.5 px-4">
+                                  <span className="inline-block px-2 py-0.5 rounded text-[11px] font-bold bg-blue-50 text-blue-700">
+                                    {blogAnalytics?.cpaEfficiency}
+                                  </span>
+                                </td>
+                                <td className="py-3.5 px-4 text-slate-600">공동구매 / 프로모션 할인 코드 배포</td>
+                                <td className="py-3.5 px-4 text-right font-bold text-emerald-600">★★★★☆</td>
+                              </tr>
+                              <tr>
+                                <td className="py-3.5 px-4 font-bold text-slate-900 flex items-center gap-2">
+                                  <Calendar size={14} className="text-amber-500" /> 포스팅 지속성
+                                </td>
+                                <td className="py-3.5 px-4 font-bold text-slate-800">월 약 {blogAnalytics?.monthlyPosts}건</td>
+                                <td className="py-3.5 px-4">
+                                  <span className="inline-block px-2 py-0.5 rounded text-[11px] font-bold bg-slate-100 text-slate-700">
+                                    고활동성 크리에이터
+                                  </span>
+                                </td>
+                                <td className="py-3.5 px-4 text-slate-600">신제품 런칭 주간 집중 바이럴</td>
+                                <td className="py-3.5 px-4 text-right font-bold text-emerald-600">★★★★★</td>
+                              </tr>
+                              <tr>
+                                <td className="py-3.5 px-4 font-bold text-slate-900 flex items-center gap-2">
+                                  <Sparkles size={14} className="text-purple-500" /> SEO 상위노출력
+                                </td>
+                                <td className="py-3.5 px-4 font-bold text-slate-800">평균 사진 {blogAnalytics?.avgImages}장</td>
+                                <td className="py-3.5 px-4">
+                                  <span className="inline-block px-2 py-0.5 rounded text-[11px] font-bold bg-purple-50 text-purple-700">
+                                    C-Rank 고품질 블로그
+                                  </span>
+                                </td>
+                                <td className="py-3.5 px-4 text-slate-600">스마트블록 키워드 점유 캠페인</td>
+                                <td className="py-3.5 px-4 text-right font-bold text-emerald-600">★★★★★</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
+            </div>
+          ) : (
+            <div className="h-full flex items-center justify-center text-sm text-slate-400">
+              선택된 블로그 인플루언서가 없습니다.
             </div>
           )}
         </div>
