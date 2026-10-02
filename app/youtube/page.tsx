@@ -18,18 +18,18 @@ interface Influencer {
   follower_count: number;
   total_video_count: number;
   avg_views: number;
-  avg_video_views: number;
-  avg_shorts_views: number;
-  avg_likes: number;
-  avg_comments: number;
-  engagement_rate: number;
-  estimated_video_cpv_price: number;
-  estimated_shorts_cpv_price: number;
-  sponsored_video_ratio: number;
+  avg_video_views?: number;
+  avg_shorts_views?: number;
+  avg_likes?: number;
+  avg_comments?: number;
+  engagement_rate?: number;
+  estimated_video_cpv_price?: number;
+  estimated_shorts_cpv_price?: number;
+  sponsored_video_ratio?: number;
   audience_languages?: Record<string, number>;
   primary_language?: string;
   contact_email: string | null;
-  tags: string[];
+  tags?: string[];
 }
 
 interface Post {
@@ -55,14 +55,12 @@ export default function YoutubeDashboardPage() {
   const [subRange, setSubRange] = useState<SubscriberRange>('all');
   const [ytSort, setYtSort] = useState<YoutubeSortOption>('follower_desc');
   
-  // 4대 탭: 기본정보 / 시청자분석PRO / 수익분석PRO / 광고단가분석PRO
   const [activeTab, setActiveTab] = useState<'basic' | 'audience' | 'revenue' | 'ad_price'>('basic');
 
   const [influencers, setInfluencers] = useState<Influencer[]>([]);
   const [selectedChannel, setSelectedChannel] = useState<Influencer | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(false);
-  const [loadingPosts, setLoadingPosts] = useState(false);
 
   useEffect(() => {
     const loadChannels = async () => {
@@ -73,12 +71,12 @@ export default function YoutubeDashboardPage() {
           .select('*')
           .order('follower_count', { ascending: false })
           .limit(2000);
-        if (data) {
+        if (data && data.length > 0) {
           setInfluencers(data as Influencer[]);
-          if (data.length > 0 && !selectedChannel) {
-            setSelectedChannel(data[0] as Influencer);
-          }
+          setSelectedChannel(data[0] as Influencer);
         }
+      } catch (err) {
+        console.error(err);
       } finally {
         setLoading(false);
       }
@@ -89,7 +87,6 @@ export default function YoutubeDashboardPage() {
   useEffect(() => {
     if (!selectedChannel) return;
     const loadPosts = async () => {
-      setLoadingPosts(true);
       try {
         let cleanId = selectedChannel.channel_id || '';
         if (cleanId.includes('/')) {
@@ -102,14 +99,13 @@ export default function YoutubeDashboardPage() {
           .or(`channel_id.eq.${cleanId},channel_id.eq.${selectedChannel.channel_id}`)
           .limit(20);
         if (data) setPosts(data as Post[]);
-      } finally {
-        setLoadingPosts(false);
+      } catch (err) {
+        console.error(err);
       }
     };
     loadPosts();
   }, [selectedChannel]);
 
-  // 검색 및 필터링
   const filteredInfluencers = useMemo(() => {
     const list = influencers.filter((item) => {
       const rawQ = (search || '').trim().toLowerCase();
@@ -124,7 +120,7 @@ export default function YoutubeDashboardPage() {
         handleRaw.replace(/\s+/g, '').includes(q);
 
       const matchesTag = ytTag === '전체' || 
-        (item.tags && item.tags.some(t => t.includes(ytTag))) ||
+        (Array.isArray(item.tags) && item.tags.some(t => t.includes(ytTag))) ||
         (item.name && item.name.includes(ytTag));
 
       const count = item.follower_count || 0;
@@ -147,28 +143,24 @@ export default function YoutubeDashboardPage() {
     return list.slice(0, 1000);
   }, [influencers, search, ytTag, subRange, ytSort, isProUser]);
 
-  // 유튜브 세부 수식 및 시각화 데이터 계산
+  // 안전 연산 보강 (크래시 방지)
   const ytAnalytics = useMemo(() => {
     if (!selectedChannel) return null;
     const subs = selectedChannel.follower_count || 0;
-    const views = selectedChannel.avg_views || Math.round(subs * 0.18);
-    const eng = selectedChannel.engagement_rate || 3.8;
+    const views = selectedChannel.avg_views || Math.max(1000, Math.round(subs * 0.18));
+    const eng = selectedChannel.engagement_rate ?? 3.8;
 
-    // 1) 예상 브랜디드 광고 단가 (CPV 25원 ~ 35원 기준)
     const estLongform = selectedChannel.estimated_video_cpv_price || Math.max(300000, Math.round((views * 28) / 10000) * 10000);
     const estShorts = selectedChannel.estimated_shorts_cpv_price || Math.max(150000, Math.round((estLongform * 0.45) / 10000) * 10000);
 
-    // 2) 월간 예상 애드센스 수익 (조회수 1회당 1.8원 ~ 2.4원 RPM 환산)
-    const monthlyViews = views * 4; // 월 4회 릴리즈 가정
+    const monthlyViews = views * 4;
     const estMonthlyAdsense = Math.round((monthlyViews * 2.1) / 10000) * 10000;
 
-    // 3) 종합 채널 협업 스코어
     let score = 75;
     if (eng > 4.5) score += 12;
     if (views / Math.max(subs, 1) > 0.25) score += 10;
     score = Math.min(99, Math.max(65, score));
 
-    // 4) 최근 8개 영상 조회수 시각화 막대 데이터
     const barData = posts.slice(0, 8).map((p, idx) => ({
       index: idx + 1,
       views: p.view_count || Math.round(views * (0.8 + idx * 0.05)),
@@ -176,7 +168,6 @@ export default function YoutubeDashboardPage() {
     }));
     const maxBarValue = Math.max(...barData.map(b => b.views), 10000);
 
-    // 5) 시청자 언어 점유율 (한국 82%, 글로벌 18%)
     const langKr = 82;
     const langGlobal = 18;
 
@@ -189,8 +180,8 @@ export default function YoutubeDashboardPage() {
       maxBarValue,
       langKr,
       langGlobal,
-      reachPower: (views / Math.max(subs, 1) * 100).toFixed(1),
-      cpaEfficiency: eng > 4.5 ? 'S등급 (팬덤 전환력 최상)' : eng > 2.5 ? 'A등급 (안정적 도달)' : 'B등급 (단순 인지도용)'
+      reachPower: Number((views / Math.max(subs, 1) * 100).toFixed(1)),
+      cpaEfficiencyGrade: eng > 4.5 ? 'S등급' : eng > 2.5 ? 'A등급' : 'B등급'
     };
   }, [selectedChannel, posts]);
 
@@ -289,7 +280,7 @@ export default function YoutubeDashboardPage() {
         </div>
       </div>
 
-      {/* 본문 뷰 */}
+      {/* 본문 영역 */}
       <div className="flex-1 flex overflow-hidden">
         {/* 좌측 채널 목록 */}
         <div className="w-1/3 border-r border-slate-200 overflow-y-auto bg-white flex flex-col justify-between">
@@ -385,12 +376,12 @@ export default function YoutubeDashboardPage() {
                     rel="noreferrer"
                     className="flex items-center gap-1.5 text-xs font-semibold px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-900 transition shadow-xs cursor-pointer"
                   >
-                    <ExternalLink size={14} /> 유튜브 채널 <ExternalLink size={12} />
+                    <ExternalLink size={14} /> 유튜브 채널
                   </a>
                 )}
               </div>
 
-              {/* ★ 4대 네비게이션 탭: 기본정보 / 시청자분석PRO / 수익분석PRO / 광고단가분석PRO ★ */}
+              {/* 4대 탭 네비게이션 */}
               <div className="flex gap-2 border-b border-slate-200 pb-2">
                 <button
                   type="button"
@@ -430,14 +421,14 @@ export default function YoutubeDashboardPage() {
                 </button>
               </div>
 
-              {/* ---------------- 탭 1: 기본정보 (무료 공개 / 핵심 지표 마스킹) ---------------- */}
+              {/* ---------------- 탭 1: 기본정보 (무료 공개) ---------------- */}
               {activeTab === 'basic' && (
                 <div className="space-y-6">
                   <div className="grid grid-cols-4 gap-4">
                     <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
                       <p className="text-xs font-medium text-slate-400 mb-1">총 구독자 수</p>
                       <p className="text-2xl font-black text-slate-900">{(selectedChannel.follower_count || 0).toLocaleString()}명</p>
-                      <span className="text-[11px] text-red-500 font-medium mt-1 inline-block">✓ 공식 채널 구독자</span>
+                      <span className="text-[11px] text-red-500 font-medium mt-1 inline-block">✓ 공식 채널</span>
                     </div>
 
                     <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs relative overflow-hidden">
@@ -455,7 +446,7 @@ export default function YoutubeDashboardPage() {
                     </div>
 
                     <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs relative overflow-hidden">
-                      <p className="text-xs font-medium text-slate-400 mb-1">시청자 참여율 (Engagement)</p>
+                      <p className="text-xs font-medium text-slate-400 mb-1">시청자 참여율</p>
                       {isProUser ? (
                         <p className="text-2xl font-black text-purple-600">{selectedChannel.engagement_rate || 3.8}%</p>
                       ) : (
@@ -475,7 +466,7 @@ export default function YoutubeDashboardPage() {
                     </div>
                   </div>
 
-                  {/* 최근 발행 영상 콘텐츠 그리드 */}
+                  {/* 최근 발행 영상 목록 */}
                   <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
                     <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
                       <div className="flex items-center gap-2">
@@ -532,7 +523,7 @@ export default function YoutubeDashboardPage() {
                 </div>
               )}
 
-              {/* ---------------- 탭 2: 시청자분석 PRO (도넛 게이지 & 벤치마크) ---------------- */}
+              {/* ---------------- 탭 2: 시청자분석 PRO (도넛 게이지 & 도달 파워) ---------------- */}
               {activeTab === 'audience' && (
                 <div className="space-y-6">
                   {!isProUser ? (
@@ -553,96 +544,90 @@ export default function YoutubeDashboardPage() {
                       </button>
                     </div>
                   ) : (
-                    <>
-                      <div className="grid grid-cols-5 gap-6">
-                        {/* 시청자 언어/국가 도넛 차트 */}
-                        <div className="col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs flex flex-col justify-between">
-                          <div className="flex items-center justify-between mb-2">
-                            <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                              <Globe className="text-blue-600" size={15} /> 주요 시청자 언어 포트폴리오
-                            </h4>
-                          </div>
+                    <div className="grid grid-cols-5 gap-6">
+                      <div className="col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs flex flex-col justify-between">
+                        <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5 mb-2">
+                          <Globe className="text-blue-600" size={15} /> 주요 시청자 언어 포트폴리오
+                        </h4>
 
-                          <div className="py-4 flex flex-col items-center justify-center relative">
-                            <svg className="w-36 h-36 transform -rotate-90" viewBox="0 0 36 36">
-                              <path
-                                className="text-blue-500"
-                                stroke="currentColor"
-                                strokeWidth="4.2"
-                                fill="none"
-                                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                              />
-                              <path
-                                className="text-indigo-400"
-                                strokeDasharray={`${ytAnalytics?.langGlobal || 18}, 100`}
-                                strokeWidth="4.2"
-                                strokeLinecap="round"
-                                stroke="currentColor"
-                                fill="none"
-                                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                              />
-                            </svg>
-                            <div className="absolute inset-0 flex flex-col items-center justify-center">
-                              <span className="text-xs text-slate-400 font-medium">한국 시청자</span>
-                              <span className="text-xl font-black text-slate-900">{ytAnalytics?.langKr}%</span>
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-2 pt-3 border-t border-slate-100 text-[11px]">
-                            <div className="flex items-center gap-2">
-                              <div className="w-2.5 h-2.5 rounded-full bg-blue-500"></div>
-                              <span className="text-slate-600">한국어 ({ytAnalytics?.langKr}%)</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <div className="w-2.5 h-2.5 rounded-full bg-indigo-400"></div>
-                              <span className="text-slate-600">글로벌 ({ytAnalytics?.langGlobal}%)</span>
-                            </div>
+                        <div className="py-4 flex flex-col items-center justify-center relative">
+                          <svg className="w-36 h-36 transform -rotate-90" viewBox="0 0 36 36">
+                            <path
+                              className="text-blue-500"
+                              stroke="currentColor"
+                              strokeWidth="4.2"
+                              fill="none"
+                              d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                            />
+                            <path
+                              className="text-indigo-400"
+                              strokeDasharray="18, 100"
+                              strokeWidth="4.2"
+                              strokeLinecap="round"
+                              stroke="currentColor"
+                              fill="none"
+                              d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                            />
+                          </svg>
+                          <div className="absolute inset-0 flex flex-col items-center justify-center">
+                            <span className="text-xs text-slate-400 font-medium">한국 시청자</span>
+                            <span className="text-xl font-black text-slate-900">{ytAnalytics?.langKr ?? 82}%</span>
                           </div>
                         </div>
 
-                        {/* 시청자 전환 도달력 3색 게이지 */}
-                        <div className="col-span-3 bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs flex flex-col justify-between">
-                          <div>
-                            <div className="flex items-center justify-between mb-3">
-                              <div>
-                                <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                                  <TrendingUp className="text-blue-600" size={15} /> 구독자 대비 조회수 도달 파워
-                                </h4>
-                                <p className="text-[11px] text-slate-400 mt-0.5">평균 조회수 / 구독자수 비율 벤치마크</p>
-                              </div>
-                              <span className="text-sm font-black text-blue-600">{ytAnalytics?.reachPower}% (충성 시청자)</span>
-                            </div>
-
-                            <div className="relative pt-4 pb-2">
-                              <div className="w-full h-3 rounded-full bg-slate-100 flex overflow-hidden">
-                                <div className="w-1/3 bg-slate-300" title="저조"></div>
-                                <div className="w-1/3 bg-blue-300" title="보통"></div>
-                                <div className="w-1/3 bg-blue-600" title="매우 높음"></div>
-                              </div>
-                              <div 
-                                style={{ left: `${Math.min(95, Math.max(5, (Number(ytAnalytics?.reachPower || 15) / 40) * 100))}%` }}
-                                className="absolute top-1 -translate-x-1/2 flex flex-col items-center"
-                              >
-                                <span className="text-[10px] font-black text-blue-700 bg-blue-100 px-1.5 py-0.2 rounded shadow-2xs whitespace-nowrap">
-                                  현재 도달력 {ytAnalytics?.reachPower}%
-                                </span>
-                                <div className="w-1.5 h-1.5 bg-blue-700 rotate-45 -mt-0.5"></div>
-                              </div>
-                            </div>
-
-                            <div className="flex justify-between text-[10px] text-slate-400 font-medium mt-3">
-                              <span>알고리즘 미유입 (0% ~ 10%)</span>
-                              <span>안정적 팬덤 (10% ~ 25%)</span>
-                              <span>알고리즘 바이럴 폭발 (25% 이상)</span>
-                            </div>
+                        <div className="grid grid-cols-2 gap-2 pt-3 border-t border-slate-100 text-[11px]">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2.5 h-2.5 rounded-full bg-blue-500"></div>
+                            <span className="text-slate-600">한국어 ({ytAnalytics?.langKr ?? 82}%)</span>
                           </div>
-
-                          <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-100 mt-4 text-xs text-blue-800">
-                            💡 <strong>인사이트:</strong> 구독자 대비 조회수 전환율이 <strong>{ytAnalytics?.reachPower}%</strong>로, 업로드 직후 고정 시청자층의 유입 속도가 매우 빠른 채널입니다.
+                          <div className="flex items-center gap-2">
+                            <div className="w-2.5 h-2.5 rounded-full bg-indigo-400"></div>
+                            <span className="text-slate-600">글로벌 ({ytAnalytics?.langGlobal ?? 18}%)</span>
                           </div>
                         </div>
                       </div>
-                    </>
+
+                      <div className="col-span-3 bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between mb-3">
+                            <div>
+                              <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                                <TrendingUp className="text-blue-600" size={15} /> 구독자 대비 조회수 도달 파워
+                              </h4>
+                              <p className="text-[11px] text-slate-400 mt-0.5">평균 조회수 / 구독자수 비율 벤치마크</p>
+                            </div>
+                            <span className="text-sm font-black text-blue-600">{ytAnalytics?.reachPower ?? 18}% (충성 시청자)</span>
+                          </div>
+
+                          <div className="relative pt-4 pb-2">
+                            <div className="w-full h-3 rounded-full bg-slate-100 flex overflow-hidden">
+                              <div className="w-1/3 bg-slate-300"></div>
+                              <div className="w-1/3 bg-blue-300"></div>
+                              <div className="w-1/3 bg-blue-600"></div>
+                            </div>
+                            <div 
+                              style={{ left: `${Math.min(95, Math.max(5, (Number(ytAnalytics?.reachPower ?? 15) / 40) * 100))}%` }}
+                              className="absolute top-1 -translate-x-1/2 flex flex-col items-center"
+                            >
+                              <span className="text-[10px] font-black text-blue-700 bg-blue-100 px-1.5 py-0.2 rounded shadow-2xs whitespace-nowrap">
+                                현재 도달력 {ytAnalytics?.reachPower ?? 18}%
+                              </span>
+                              <div className="w-1.5 h-1.5 bg-blue-700 rotate-45 -mt-0.5"></div>
+                            </div>
+                          </div>
+
+                          <div className="flex justify-between text-[10px] text-slate-400 font-medium mt-3">
+                            <span>알고리즘 미유입 (0% ~ 10%)</span>
+                            <span>안정적 팬덤 (10% ~ 25%)</span>
+                            <span>알고리즘 바이럴 폭발 (25% 이상)</span>
+                          </div>
+                        </div>
+
+                        <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-100 mt-4 text-xs text-blue-800">
+                          💡 <strong>인사이트:</strong> 구독자 대비 조회수 전환율이 <strong>{ytAnalytics?.reachPower ?? 18}%</strong>로, 업로드 직후 고정 시청자층의 유입 속도가 매우 빠른 채널입니다.
+                        </div>
+                      </div>
+                    </div>
                   )}
                 </div>
               )}
@@ -693,7 +678,7 @@ export default function YoutubeDashboardPage() {
                             <Award size={13} /> 채널 밸류에이션 점수
                           </span>
                           <p className="text-3xl font-black text-purple-600 mt-2">
-                            {ytAnalytics?.score} <span className="text-sm font-normal text-slate-400">/ 100점</span>
+                            {ytAnalytics?.score ?? 85} <span className="text-sm font-normal text-slate-400">/ 100점</span>
                           </p>
                           <p className="text-[11px] text-slate-400 mt-1">수익 지속성 및 안정성 평가</p>
                         </div>
@@ -763,7 +748,6 @@ export default function YoutubeDashboardPage() {
                     </div>
                   ) : (
                     <>
-                      {/* 광고 단가 3대 지표 */}
                       <div className="grid grid-cols-3 gap-4">
                         <div className="bg-white p-5 rounded-2xl border-2 border-red-100 shadow-2xs">
                           <span className="text-[11px] font-bold text-red-500 flex items-center gap-1 uppercase tracking-wider">
@@ -796,7 +780,7 @@ export default function YoutubeDashboardPage() {
                             <Target size={13} /> 전환 ROI 효율 등급
                           </span>
                           <p className="text-3xl font-black text-blue-600 mt-2">
-                            {ytAnalytics?.cpaEfficiency.split(' ')[0]}
+                            {ytAnalytics?.cpaEfficiencyGrade ?? 'A등급'}
                           </p>
                           <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
                             <span>전환율</span>
@@ -805,7 +789,6 @@ export default function YoutubeDashboardPage() {
                         </div>
                       </div>
 
-                      {/* 마케팅 협업 타당성 정밀 진단표 */}
                       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs">
                         <div className="flex items-center justify-between mb-4">
                           <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
