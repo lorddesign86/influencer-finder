@@ -375,6 +375,12 @@ export default function VlingStyleDashboard() {
                 >
                   <Search size={18} /> 유튜버 찾기
                 </button>
+                <a 
+                  href="/blog"
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+                >
+                  <BookOpen size={18} /> 블로그인플루언서 찾기
+                </a>
                 <button 
                   type="button"
                   onClick={() => alert('영상 라이브러리 기능 준비 중입니다.')}
