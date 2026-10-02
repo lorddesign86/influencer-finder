@@ -7,6 +7,7 @@ import {
   BarChart3, DollarSign, Film, Bookmark, AlertCircle, PlayCircle,
   Tag, Users, ArrowUpDown, PieChart, CheckCircle2, TrendingUp,
   Globe2, UserCheck, ShieldCheck
+  BookOpen // 👈 이 항목이 들어있는지 확인!
 } from 'lucide-react';
 
 interface Influencer {
