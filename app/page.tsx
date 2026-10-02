@@ -93,10 +93,10 @@ const shuffleArray = <T,>(array: T[]): T[] => [...array].sort(() => Math.random(
 
 export default function PlatformDashboard() {
   const [platformMode, setPlatformMode] = useState<'youtube' | 'blog'>('blog');
-  const [isProUser, setIsProUser] = useState(true);
+  const [isProUser, setIsProUser] = useState(false);
   const [search, setSearch] = useState('');
 
-  const [activeTab, setActiveTab] = useState<'basic' | 'posts' | 'analytics'>('analytics');
+  const [activeTab, setActiveTab] = useState<'basic' | 'posts' | 'analytics'>('posts');
 
   const [influencers, setInfluencers] = useState<Influencer[]>([]);
   const [selectedChannel, setSelectedChannel] = useState<Influencer | null>(null);
@@ -226,7 +226,7 @@ export default function PlatformDashboard() {
   const switchToBlog = () => {
     setPlatformMode('blog');
     setSearch('');
-    setActiveTab('analytics');
+    setActiveTab('posts');
     if (bloggers.length > 0 && !selectedBlogger) {
       handleSelectBlogger(bloggers[0]);
     }
@@ -235,32 +235,32 @@ export default function PlatformDashboard() {
   const filteredBloggers = useMemo(() => {
     const list = bloggers
       .filter((item) => {
-const rawQ = search.trim().toLowerCase();
-const q = rawQ.replace(/\s+/g, ''); // 띄어쓰기 제거 검색어
+        // 검색어 정리 (앞뒤 공백 제거 및 소문자화)
+        const rawQ = (search || '').trim().toLowerCase();
+        const q = rawQ.replace(/\s+/g, '');
 
-const matchesSearch = !rawQ || (() => {
-  // 1. 이름 및 아이디 (공백 제거 비교)
-  const nameClean = (item.name || '').toLowerCase().replace(/\s+/g, '');
-  const handleClean = (item.handle || item.blog_id || '').toLowerCase().replace(/\s+/g, '');
-  if (nameClean.includes(q) || handleClean.includes(q)) return true;
+        // 1. 이름/아이디 검색
+        const nameRaw = (item.name || '').toLowerCase();
+        const handleRaw = (item.handle || item.blog_id || '').toLowerCase();
+        const isNameMatched = nameRaw.includes(rawQ) || 
+                              nameRaw.replace(/\s+/g, '').includes(q) ||
+                              handleRaw.includes(rawQ) || 
+                              handleRaw.replace(/\s+/g, '').includes(q);
 
-  // 2. 태그 / 전문 분야 목록 (예: #여행 플래너, #여행 전문블로거, #푸드 등)
-  if (item.tags && Array.isArray(item.tags)) {
-    const hasTagMatch = item.tags.some(tag => {
-      const tagClean = tag.toLowerCase().replace(/\s+/g, '');
-      return tagClean.includes(q) || q.includes(tagClean);
-    });
-    if (hasTagMatch) return true;
-  }
+        // 2. 태그/전문분야 검색
+        const isTagMatched = Array.isArray(item.tags) && item.tags.some(t => {
+          const tagStr = (t || '').toLowerCase();
+          return tagStr.includes(rawQ) || tagStr.replace(/\s+/g, '').includes(q);
+        });
 
-  // 3. 프로필 URL
-  if (item.profile_url && item.profile_url.toLowerCase().includes(rawQ)) return true;
+        // 3. 프로필 URL 검색
+        const isUrlMatched = (item.profile_url || '').toLowerCase().includes(rawQ);
 
-  return false;
-})();
+        const matchesSearch = !rawQ || isNameMatched || isTagMatched || isUrlMatched;
 
+        // 카테고리 탭 분류
         const matchesCat = blogCat === '전체' || 
-          (item.tags && item.tags.some(t => t.includes(blogCat))) ||
+          (Array.isArray(item.tags) && item.tags.some(t => t.includes(blogCat))) ||
           (item.name && item.name.includes(blogCat));
 
         const fans = item.fan_count || 0;
@@ -321,74 +321,78 @@ const matchesSearch = !rawQ || (() => {
     minComments, maxComments, blogSort, isProUser
   ]);
 
-// ★ 카테고리별 가치 세분화 단가 산출 로직
-    const totalInteractions = likes + comments; // 최근 포스트 평균 공감 + 댓글 수
+  // 마케팅 시각화 지표 및 카테고리별 단가 연산
+  const blogAnalytics = useMemo(() => {
+    if (!selectedBlogger) return null;
+    const dailyV = selectedBlogger.daily_visitors || 0;
+    const fans = selectedBlogger.fan_count || 0;
+    const likes = selectedBlogger.avg_likes ?? selectedBlogger.recent_10_avg_likes ?? 0;
+    const comments = selectedBlogger.avg_comments ?? selectedBlogger.recent_10_avg_comments ?? 0;
+    const totalInteractions = likes + comments;
     const tagsArr = selectedBlogger.tags || [];
 
-    // 1. 카테고리 매칭 판별
-    // [그룹 1: 초고단가 프리미엄군] - 10만 ~ 40만 원
+    // 1) 카테고리 매칭
     const isTier1 = tagsArr.some(t => 
       ['여행', 'IT테크', '자동차', '경제', '비즈니스', '어학', '교육', '테크'].some(k => t.includes(k))
     );
-
-    // [그룹 2: 고단가 타깃/전환소비군] - 10만 ~ 30만 원
     const isTier2 = tagsArr.some(t => 
       ['뷰티', '패션', '육아', '게임', '생활건강', '리빙'].some(k => t.includes(k))
     );
-
-    // [그룹 3: 볼륨 & 체험단군] - 8만 ~ 20만 원
     const isFood = tagsArr.some(t => 
       ['푸드', '맛집', '식음료', '카페'].some(k => t.includes(k))
     );
 
-    // 2. 카테고리별 베이스 단가 및 한도 세팅
     let basePrice = 70000;
     let minCap = 80000;
     let maxCap = 250000;
-    let interactionWeight = 150; // 공감/댓글 1개당 가치
+    let interactionWeight = 150;
 
     if (isTier1) {
-      // 여행 / IT테크 / 자동차 / 경제비즈니스 / 어학교육 (10만 ~ 40만)
       basePrice = 110000;
       minCap = 100000;
       maxCap = 400000;
       interactionWeight = 180;
     } else if (isTier2) {
-      // 뷰티 / 패션 / 육아 / 게임 / 건강 (10만 ~ 30만)
       basePrice = 90000;
       minCap = 100000;
       maxCap = 300000;
       interactionWeight = 160;
     } else if (isFood) {
-      // 맛집 / 푸드 (8만 ~ 20만)
       basePrice = 60000;
       minCap = 80000;
       maxCap = 200000;
       interactionWeight = 120;
     }
 
-    let calculated = basePrice;
+    // 2) 참여율 (Engagement Rate)
+    const engRate = selectedBlogger.engagement_rate ?? 
+      (dailyV > 0 ? Number((((likes + comments) / dailyV) * 100).toFixed(2)) : 4.5);
 
-    // 3. 독자 인터랙션(공감+댓글) 가산 (가장 핵심 가치)
+    let calculated = basePrice;
     calculated += Math.min(totalInteractions * interactionWeight, 180000);
 
-    // 4. 진성 참여율(Engagement Rate) 프리미엄
-    if (engRate >= 6.0) {
-      calculated += 50000; // 최상위 팬덤
-    } else if (engRate >= 3.5) {
-      calculated += 30000;
-    } else if (engRate >= 2.0) {
-      calculated += 15000;
-    }
+    if (engRate >= 6.0) calculated += 50000;
+    else if (engRate >= 3.5) calculated += 30000;
+    else if (engRate >= 2.0) calculated += 15000;
 
-    // 5. 일일 방문자 보조 가산 (1,000명당 약 4,000원)
     calculated += Math.min(dailyV * 4, 60000);
-
-    // 6. 카테고리별 캡 적용
     calculated = Math.max(minCap, Math.min(maxCap, calculated));
-
-    // 1만 원 단위 반올림
     const estPrice = Math.round(calculated / 10000) * 10000;
+
+    // 3) 종합 협업 지수 스코어
+    let score = 75;
+    if (engRate > 5.0) score += 15;
+    else if (engRate > 3.0) score += 8;
+    if (dailyV > 10000) score += 8;
+    score = Math.min(99, Math.max(60, score));
+
+    // 4) 포스트별 인터랙션 트렌드
+    const recentBarData = (blogPosts.slice(0, 10)).map((p, idx) => ({
+      index: idx + 1,
+      likes: p.like_count || 0,
+      comments: p.comment_count || 0,
+      total: (p.like_count || 0) + (p.comment_count || 0),
+    }));
 
     const maxBarValue = Math.max(...recentBarData.map(d => d.total), 100);
 
@@ -930,7 +934,7 @@ const matchesSearch = !rawQ || (() => {
                     )}
 
                     {/* ----------------------------------------------------
-                        탭 2: 최근 발행 콘텐츠 (협찬/일반 구분 제거)
+                        탭 2: 최근 발행 콘텐츠 (공감/댓글 수치 PRO 블러 마스킹 적용)
                     ---------------------------------------------------- */}
                     {activeTab === 'posts' && (
                       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs relative">
@@ -971,12 +975,12 @@ const matchesSearch = !rawQ || (() => {
                                   </p>
                                 </div>
 
-                              <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-100/80">
+                                <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-100/80">
                                   <span className="flex items-center gap-1">
                                     <Calendar size={12} /> {post.published_at || '최근 작성'}
                                   </span>
 
-                                  {/* ★ PRO 여부에 따른 공감/댓글 마스킹 처리 ★ */}
+                                  {/* ★ PRO 여부에 따른 공감/댓글 블러 마스킹 처리 ★ */}
                                   {isProUser ? (
                                     <div className="flex items-center gap-3">
                                       <span className="flex items-center gap-1 text-rose-500 font-medium">
@@ -1010,9 +1014,9 @@ const matchesSearch = !rawQ || (() => {
                         {!isProUser && (
                           <div className="mt-6 p-6 rounded-xl border border-dashed border-amber-300 bg-amber-50/50 flex flex-col items-center justify-center text-center">
                             <Lock className="text-amber-500 mb-2" size={24} />
-                            <h4 className="text-sm font-bold text-slate-900">최근 전체 콘텐츠 열람은 PRO 전용입니다</h4>
+                            <h4 className="text-sm font-bold text-slate-900">최근 전체 콘텐츠 열람 및 반응 수치는 PRO 전용입니다</h4>
                             <p className="text-xs text-slate-500 mt-1 max-w-md">
-                              PRO 플랜을 구독하시면 포스트별 공감/댓글 반응과 과거 전체 포스팅 피드를 무제한으로 열람할 수 있습니다.
+                              PRO 플랜을 구독하시면 포스트별 실시간 공감/댓글 반응 분석과 과거 전체 포스팅 피드를 무제한으로 열람할 수 있습니다.
                             </p>
                             <button
                               type="button"
@@ -1027,7 +1031,7 @@ const matchesSearch = !rawQ || (() => {
                     )}
 
                     {/* ----------------------------------------------------
-                        탭 3: 광고비 및 디테일분석 PRO (신뢰도 높은 실제 데이터 중심)
+                        탭 3: 광고비 및 디테일분석 PRO
                     ---------------------------------------------------- */}
                     {activeTab === 'analytics' && (
                       <div className="space-y-6">
@@ -1038,7 +1042,7 @@ const matchesSearch = !rawQ || (() => {
                             </div>
                             <h3 className="text-lg font-black text-slate-900">광고비 및 세부 수식 분석은 PRO 전용입니다</h3>
                             <p className="text-xs text-slate-500 mt-2 max-w-md leading-relaxed">
-                              예상 원고료 단가 시뮬레이션, 반응도 트렌드 그래프, 마케팅 협업 타당성 스코어를 확인하여 예산 집행 효율을 극대화하세요.
+                              카테고리별 현실 원고료 단가 시뮬레이션, 인터랙션 반응도 트렌드 그래프, 마케팅 협업 타당성 스코어를 확인하여 예산 집행 효율을 극대화하세요.
                             </p>
                             <button
                               type="button"
@@ -1052,7 +1056,6 @@ const matchesSearch = !rawQ || (() => {
                           <>
                             {/* 핵심 3대 지표 카드 */}
                             <div className="grid grid-cols-3 gap-4">
-                              {/* 1) 예상 원고료 */}
                               <div className="bg-white p-5 rounded-2xl border-2 border-emerald-100 shadow-2xs flex flex-col justify-between">
                                 <div>
                                   <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-1 uppercase tracking-wider">
@@ -1068,7 +1071,6 @@ const matchesSearch = !rawQ || (() => {
                                 </div>
                               </div>
 
-                              {/* 2) 종합 협업 스코어 */}
                               <div className="bg-white p-5 rounded-2xl border-2 border-blue-100 shadow-2xs flex flex-col justify-between">
                                 <div>
                                   <span className="text-[11px] font-bold text-blue-600 flex items-center gap-1 uppercase tracking-wider">
@@ -1085,7 +1087,6 @@ const matchesSearch = !rawQ || (() => {
                                 </div>
                               </div>
 
-                              {/* 3) 진성 독자 반응률 */}
                               <div className="bg-white p-5 rounded-2xl border-2 border-purple-100 shadow-2xs flex flex-col justify-between">
                                 <div>
                                   <span className="text-[11px] font-bold text-purple-600 flex items-center gap-1 uppercase tracking-wider">
@@ -1102,7 +1103,7 @@ const matchesSearch = !rawQ || (() => {
                               </div>
                             </div>
 
-                            {/* 최근 포스트 반응도 막대 그래프 (단독 와이드 배치) */}
+                            {/* 최근 포스트 반응도 막대 그래프 */}
                             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs">
                               <div className="flex items-center justify-between mb-2">
                                 <div>
