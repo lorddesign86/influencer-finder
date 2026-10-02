@@ -11,26 +11,30 @@ import {
 
 interface Influencer {
   channel_id: string;
-  name: string;
-  handle: string;
+  name?: string;
+  handle?: string;
   profile_url?: string;
-  profile_img_url: string;
-  follower_count: number;
-  total_video_count: number;
-  avg_views: number;
+  profile_img_url?: string;
+  follower_count?: number;
+  total_video_count?: number;
+  avg_views?: number;
+  avg_video_views?: number;
+  avg_shorts_views?: number;
+  avg_likes?: number;
+  avg_comments?: number;
   engagement_rate?: number;
   estimated_video_cpv_price?: number;
   estimated_shorts_cpv_price?: number;
-  contact_email: string | null;
+  contact_email?: string | null;
   tags?: string[];
 }
 
 interface Post {
   video_id?: string;
-  channel_id: string;
-  title: string;
-  post_url: string;
-  thumbnail_url: string;
+  channel_id?: string;
+  title?: string;
+  post_url?: string;
+  thumbnail_url?: string;
   view_count?: number;
   like_count?: number;
   comment_count?: number;
@@ -71,7 +75,7 @@ export default function YoutubeDashboardPage() {
           setSelectedChannel(data[0] as Influencer);
         }
       } catch (err) {
-        console.error('Supabase fetch error:', err);
+        console.error('채널 로드 에러:', err);
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -80,9 +84,9 @@ export default function YoutubeDashboardPage() {
     return () => { isMounted = false; };
   }, []);
 
-  // 2. 선택된 채널의 포스트 불러오기
+  // 2. 포스트 데이터 불러오기
   useEffect(() => {
-    if (!selectedChannel) return;
+    if (!selectedChannel || !selectedChannel.channel_id) return;
     let isMounted = true;
 
     const loadPosts = async () => {
@@ -102,21 +106,22 @@ export default function YoutubeDashboardPage() {
           setPosts(data as Post[]);
         }
       } catch (err) {
-        console.error('Posts fetch error:', err);
+        console.error('포스트 로드 에러:', err);
       }
     };
     loadPosts();
     return () => { isMounted = false; };
   }, [selectedChannel]);
 
-  // 3. 필터링 로직 (Hydration 에러 방지: Math.random 배제)
+  // 3. 필터링 & 정렬 (PRO 전환 시 NaN / Null 크래시 방지)
   const filteredInfluencers = useMemo(() => {
     const rawQ = (search || '').trim().toLowerCase();
     const q = rawQ.replace(/\s+/g, '');
 
     const list = influencers.filter((item) => {
+      if (!item) return false;
       const nameRaw = (item.name || '').toLowerCase();
-      const handleRaw = (item.handle || '').toLowerCase();
+      const handleRaw = (item.handle || item.channel_id || '').toLowerCase();
 
       const matchesSearch = !rawQ || 
         nameRaw.includes(rawQ) || 
@@ -125,10 +130,10 @@ export default function YoutubeDashboardPage() {
         handleRaw.replace(/\s+/g, '').includes(q);
 
       const matchesTag = ytTag === '전체' || 
-        (Array.isArray(item.tags) && item.tags.some(t => t.includes(ytTag))) ||
+        (Array.isArray(item.tags) && item.tags.some(t => (t || '').includes(ytTag))) ||
         (item.name && item.name.includes(ytTag));
 
-      const count = item.follower_count || 0;
+      const count = Number(item.follower_count || 0);
       let matchesRange = true;
       if (subRange === 'under10k') matchesRange = count < 10000;
       else if (subRange === '10k_100k') matchesRange = count >= 10000 && count < 100000;
@@ -138,11 +143,19 @@ export default function YoutubeDashboardPage() {
       return matchesSearch && matchesTag && matchesRange;
     });
 
+    // PRO 모드일 때 정렬 수행 (안전한 숫자 변환)
     if (isProUser) {
       return [...list].sort((a, b) => {
-        if (ytSort === 'follower_desc') return (b.follower_count || 0) - (a.follower_count || 0);
-        if (ytSort === 'views_desc') return (b.avg_views || 0) - (a.avg_views || 0);
-        if (ytSort === 'engagement_desc') return (b.engagement_rate || 0) - (a.engagement_rate || 0);
+        const aFollowers = Number(a?.follower_count) || 0;
+        const bFollowers = Number(b?.follower_count) || 0;
+        const aViews = Number(a?.avg_views) || 0;
+        const bViews = Number(b?.avg_views) || 0;
+        const aEng = Number(a?.engagement_rate) || 0;
+        const bEng = Number(b?.engagement_rate) || 0;
+
+        if (ytSort === 'follower_desc') return bFollowers - aFollowers;
+        if (ytSort === 'views_desc') return bViews - aViews;
+        if (ytSort === 'engagement_desc') return bEng - aEng;
         return 0;
       });
     }
@@ -150,29 +163,16 @@ export default function YoutubeDashboardPage() {
     return list.slice(0, 15);
   }, [influencers, search, ytTag, subRange, ytSort, isProUser]);
 
-  // 4. 안전한 지표 연산 (selectedChannel이 null이어도 절대 크래시 안 남)
+  // 4. 지표 연산 (모든 속성 안전 가드)
   const ytAnalytics = useMemo(() => {
-    if (!selectedChannel) {
-      return {
-        estLongform: 0,
-        estShorts: 0,
-        estMonthlyAdsense: 0,
-        score: 70,
-        barData: [],
-        maxBarValue: 100,
-        langKr: 80,
-        langGlobal: 20,
-        reachPower: 15,
-        cpaGrade: 'B등급'
-      };
-    }
+    const subs = Number(selectedChannel?.follower_count) || 1;
+    const views = Number(selectedChannel?.avg_views) || Math.max(1000, Math.round(subs * 0.15));
+    const eng = Number(selectedChannel?.engagement_rate) || 3.5;
 
-    const subs = selectedChannel.follower_count || 1;
-    const views = selectedChannel.avg_views || Math.max(1000, Math.round(subs * 0.15));
-    const eng = selectedChannel.engagement_rate || 3.5;
-
-    const estLongform = selectedChannel.estimated_video_cpv_price || Math.max(300000, Math.round((views * 28) / 10000) * 10000);
-    const estShorts = selectedChannel.estimated_shorts_cpv_price || Math.max(150000, Math.round((estLongform * 0.45) / 10000) * 10000);
+    const estLongform = Number(selectedChannel?.estimated_video_cpv_price) || 
+      Math.max(300000, Math.round((views * 28) / 10000) * 10000);
+    const estShorts = Number(selectedChannel?.estimated_shorts_cpv_price) || 
+      Math.max(150000, Math.round((estLongform * 0.45) / 10000) * 10000);
 
     const estMonthlyAdsense = Math.round((views * 4 * 2.1) / 10000) * 10000;
 
@@ -181,9 +181,10 @@ export default function YoutubeDashboardPage() {
     if (views / subs > 0.2) score += 10;
     score = Math.min(99, Math.max(60, score));
 
-    const barData = (posts && posts.length > 0 ? posts.slice(0, 8) : []).map((p, idx) => ({
+    const postList = Array.isArray(posts) ? posts : [];
+    const barData = postList.slice(0, 8).map((p, idx) => ({
       index: idx + 1,
-      views: p.view_count || Math.round(views * (0.8 + idx * 0.05)),
+      views: Number(p?.view_count) || Math.round(views * (0.8 + idx * 0.05)),
     }));
 
     const maxBarValue = Math.max(...barData.map(b => b.views), 1000);
@@ -196,9 +197,7 @@ export default function YoutubeDashboardPage() {
       score,
       barData,
       maxBarValue,
-      langKr: 82,
-      langGlobal: 18,
-      reachPower,
+      reachPower: isNaN(reachPower) ? 15.0 : reachPower,
       cpaGrade: eng > 4.5 ? 'S등급' : eng > 2.5 ? 'A등급' : 'B등급'
     };
   }, [selectedChannel, posts]);
@@ -306,7 +305,7 @@ export default function YoutubeDashboardPage() {
         </div>
       </div>
 
-      {/* 본문 뷰 */}
+      {/* 메인 뷰 */}
       <div className="flex-1 flex overflow-hidden">
         {/* 좌측 채널 목록 */}
         <div className="w-1/3 border-r border-slate-200 overflow-y-auto bg-white flex flex-col justify-between">
@@ -335,22 +334,29 @@ export default function YoutubeDashboardPage() {
                 >
                   <img 
                     src={channel.profile_img_url || 'https://via.placeholder.com/150'} 
-                    alt={channel.name} 
+                    alt={channel.name || '채널'} 
+                    referrerPolicy="no-referrer"
                     className="w-12 h-12 rounded-full border border-slate-200 object-cover flex-shrink-0"
                   />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <h4 className="text-sm font-bold text-slate-900 truncate">{channel.name}</h4>
+                      <h4 className="text-sm font-bold text-slate-900 truncate">{channel.name || '유튜브 크리에이터'}</h4>
                       <span className="text-[9px] px-1.5 py-0.2 bg-red-100 text-red-600 font-bold rounded">YOUTUBER</span>
                     </div>
                     <p className="text-xs text-slate-400 truncate">@{channel.handle || channel.channel_id}</p>
                     
                     <div className="flex items-center gap-2 mt-2 text-[11px]">
-                      <span className="font-semibold text-slate-700">구독자 {(channel.follower_count || 0).toLocaleString()}명</span>
+                      <span className="font-semibold text-slate-700">
+                        구독자 {Number(channel.follower_count || 0).toLocaleString()}명
+                      </span>
                       {isProUser ? (
-                        <span className="text-slate-400">• 평균조회 {(channel.avg_views || 0).toLocaleString()}회</span>
+                        <span className="text-slate-400">
+                          • 평균조회 {Number(channel.avg_views || 0).toLocaleString()}회
+                        </span>
                       ) : (
-                        <span className="text-slate-300 flex items-center gap-0.5">• 평균조회 <Lock size={10} className="text-amber-500" /></span>
+                        <span className="text-slate-300 flex items-center gap-0.5">
+                          • 평균조회 <Lock size={10} className="text-amber-500" />
+                        </span>
                       )}
                     </div>
                   </div>
@@ -360,22 +366,23 @@ export default function YoutubeDashboardPage() {
           </div>
         </div>
 
-        {/* 우측 유튜브 상세 분석 대시보드 */}
+        {/* 우측 채널 대시보드 */}
         <div className="flex-1 overflow-y-auto p-8 bg-[#f8f9fa]">
           {selectedChannel ? (
             <div className="max-w-4xl mx-auto space-y-6">
-              {/* 상단 프로필 헤더 */}
+              {/* 프로필 헤더 */}
               <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs flex items-start justify-between">
                 <div className="flex gap-4">
                   <img 
                     src={selectedChannel.profile_img_url || 'https://via.placeholder.com/150'} 
-                    alt={selectedChannel.name} 
+                    alt={selectedChannel.name || '프로필'} 
+                    referrerPolicy="no-referrer"
                     className="w-16 h-16 rounded-full border border-slate-200 object-cover"
                   />
                   <div>
                     <div className="flex items-center gap-2">
                       <h2 className="text-xl font-bold text-slate-900">{selectedChannel.name}</h2>
-                      <span className="text-xs px-2 py-0.5 bg-red-100 text-red-600 rounded font-bold">공식 인증 파트너</span>
+                      <span className="text-xs px-2 py-0.5 bg-red-100 text-red-600 rounded font-bold">공식 파트너</span>
                     </div>
                     <p className="text-sm text-slate-400 mt-0.5">@{selectedChannel.handle || selectedChannel.channel_id}</p>
                     <div className="flex flex-wrap gap-1.5 mt-3">
@@ -405,7 +412,7 @@ export default function YoutubeDashboardPage() {
                 )}
               </div>
 
-              {/* 4대 탭 네비게이션 */}
+              {/* 4대 탭 */}
               <div className="flex gap-2 border-b border-slate-200 pb-2">
                 <button
                   type="button"
@@ -451,14 +458,14 @@ export default function YoutubeDashboardPage() {
                   <div className="grid grid-cols-4 gap-4">
                     <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
                       <p className="text-xs font-medium text-slate-400 mb-1">총 구독자 수</p>
-                      <p className="text-2xl font-black text-slate-900">{(selectedChannel.follower_count || 0).toLocaleString()}명</p>
+                      <p className="text-2xl font-black text-slate-900">{Number(selectedChannel.follower_count || 0).toLocaleString()}명</p>
                       <span className="text-[11px] text-red-500 font-medium mt-1 inline-block">✓ 공식 채널</span>
                     </div>
 
                     <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs relative overflow-hidden">
                       <p className="text-xs font-medium text-slate-400 mb-1">영상당 평균 조회수</p>
                       {isProUser ? (
-                        <p className="text-2xl font-black text-red-500">{(selectedChannel.avg_views || 0).toLocaleString()}회</p>
+                        <p className="text-2xl font-black text-red-500">{Number(selectedChannel.avg_views || 0).toLocaleString()}회</p>
                       ) : (
                         <div>
                           <p className="text-2xl font-black text-slate-300 blur-[4px] select-none">384,120회</p>
@@ -472,7 +479,7 @@ export default function YoutubeDashboardPage() {
                     <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs relative overflow-hidden">
                       <p className="text-xs font-medium text-slate-400 mb-1">시청자 참여율</p>
                       {isProUser ? (
-                        <p className="text-2xl font-black text-purple-600">{selectedChannel.engagement_rate || 3.8}%</p>
+                        <p className="text-2xl font-black text-purple-600">{Number(selectedChannel.engagement_rate || 3.8)}%</p>
                       ) : (
                         <div>
                           <p className="text-2xl font-black text-slate-300 blur-[4px] select-none">4.82%</p>
@@ -485,7 +492,7 @@ export default function YoutubeDashboardPage() {
 
                     <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
                       <p className="text-xs font-medium text-slate-400 mb-1">총 누적 영상 수</p>
-                      <p className="text-2xl font-black text-slate-900">{(selectedChannel.total_video_count || posts.length || 120).toLocaleString()}개</p>
+                      <p className="text-2xl font-black text-slate-900">{Number(selectedChannel.total_video_count || posts.length || 120).toLocaleString()}개</p>
                       <span className="text-[11px] text-slate-400 font-medium mt-1 inline-block">주 1.5회 정기 업로드</span>
                     </div>
                   </div>
@@ -504,7 +511,7 @@ export default function YoutubeDashboardPage() {
                       {(isProUser ? posts : posts.slice(0, 4)).map((video, idx) => (
                         <a
                           key={idx}
-                          href={video.post_url}
+                          href={video.post_url || '#'}
                           target="_blank"
                           rel="noreferrer"
                           className="group block p-3 rounded-xl border border-slate-100 hover:border-slate-200 hover:shadow-md transition bg-slate-50/50"
@@ -512,18 +519,19 @@ export default function YoutubeDashboardPage() {
                           <div className="aspect-video w-full rounded-lg overflow-hidden bg-slate-200 relative mb-2">
                             <img 
                               src={video.thumbnail_url || 'https://via.placeholder.com/300x200?text=YouTube+Video'} 
-                              alt={video.title} 
+                              alt={video.title || '영상'} 
+                              referrerPolicy="no-referrer"
                               className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
                             />
                           </div>
                           <h4 className="text-xs font-bold text-slate-900 group-hover:text-red-500 transition line-clamp-2">
-                            {video.title}
+                            {video.title || '영상 제목 없음'}
                           </h4>
                           <div className="flex items-center justify-between text-[11px] text-slate-400 mt-2 pt-1.5 border-t border-slate-100">
                             {isProUser ? (
                               <>
-                                <span>조회수 {(video.view_count || 0).toLocaleString()}회</span>
-                                <span>좋아요 {(video.like_count || 0).toLocaleString()}</span>
+                                <span>조회수 {Number(video.view_count || 0).toLocaleString()}회</span>
+                                <span>좋아요 {Number(video.like_count || 0).toLocaleString()}</span>
                               </>
                             ) : (
                               <>
@@ -575,38 +583,22 @@ export default function YoutubeDashboardPage() {
                         </h4>
 
                         <div className="py-4 flex flex-col items-center justify-center relative">
-                          <svg className="w-36 h-36 transform -rotate-90" viewBox="0 0 36 36">
-                            <path
-                              className="text-blue-500"
-                              stroke="currentColor"
-                              strokeWidth="4.2"
-                              fill="none"
-                              d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                            />
-                            <path
-                              className="text-indigo-400"
-                              strokeDasharray="18, 100"
-                              strokeWidth="4.2"
-                              strokeLinecap="round"
-                              stroke="currentColor"
-                              fill="none"
-                              d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                            />
-                          </svg>
-                          <div className="absolute inset-0 flex flex-col items-center justify-center">
-                            <span className="text-xs text-slate-400 font-medium">한국 시청자</span>
-                            <span className="text-xl font-black text-slate-900">{ytAnalytics.langKr}%</span>
+                          <div className="w-32 h-32 rounded-full border-8 border-indigo-400 border-t-blue-500 flex items-center justify-center">
+                            <div className="flex flex-col items-center">
+                              <span className="text-xs text-slate-400 font-medium">한국 시청자</span>
+                              <span className="text-xl font-black text-slate-900">82%</span>
+                            </div>
                           </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-2 pt-3 border-t border-slate-100 text-[11px]">
                           <div className="flex items-center gap-2">
                             <div className="w-2.5 h-2.5 rounded-full bg-blue-500"></div>
-                            <span className="text-slate-600">한국어 ({ytAnalytics.langKr}%)</span>
+                            <span className="text-slate-600">한국어 (82%)</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <div className="w-2.5 h-2.5 rounded-full bg-indigo-400"></div>
-                            <span className="text-slate-600">글로벌 ({ytAnalytics.langGlobal}%)</span>
+                            <span className="text-slate-600">글로벌 (18%)</span>
                           </div>
                         </div>
                       </div>
@@ -620,7 +612,7 @@ export default function YoutubeDashboardPage() {
                               </h4>
                               <p className="text-[11px] text-slate-400 mt-0.5">평균 조회수 / 구독자수 비율 벤치마크</p>
                             </div>
-                            <span className="text-sm font-black text-blue-600">{ytAnalytics.reachPower}% (충성 시청자)</span>
+                            <span className="text-sm font-black text-blue-600">{ytAnalytics.reachPower}%</span>
                           </div>
 
                           <div className="relative pt-4 pb-2">
@@ -641,14 +633,14 @@ export default function YoutubeDashboardPage() {
                           </div>
 
                           <div className="flex justify-between text-[10px] text-slate-400 font-medium mt-3">
-                            <span>알고리즘 미유입 (0% ~ 10%)</span>
+                            <span>기본 도달 (0% ~ 10%)</span>
                             <span>안정적 팬덤 (10% ~ 25%)</span>
-                            <span>알고리즘 바이럴 폭발 (25% 이상)</span>
+                            <span>알고리즘 바이럴 (25% 이상)</span>
                           </div>
                         </div>
 
                         <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-100 mt-4 text-xs text-blue-800">
-                          💡 <strong>인사이트:</strong> 구독자 대비 조회수 전환율이 <strong>{ytAnalytics.reachPower}%</strong>로, 업로드 직후 고정 시청자층의 유입 속도가 매우 빠른 채널입니다.
+                          💡 <strong>인사이트:</strong> 구독자 대비 조회수 전환율이 <strong>{ytAnalytics.reachPower}%</strong>로 안정적인 고정 팬덤을 확보한 채널입니다.
                         </div>
                       </div>
                     </div>
@@ -684,7 +676,7 @@ export default function YoutubeDashboardPage() {
                             <DollarSign size={13} /> 월간 예상 애드센스 수익
                           </span>
                           <p className="text-3xl font-black text-slate-900 mt-2">
-                            {ytAnalytics.estMonthlyAdsense.toLocaleString()} <span className="text-sm font-normal text-slate-500">원</span>
+                            {Number(ytAnalytics.estMonthlyAdsense).toLocaleString()} <span className="text-sm font-normal text-slate-500">원</span>
                           </p>
                           <p className="text-[11px] text-slate-400 mt-1">월 평균 조회수 × 한국 평균 RPM 기준</p>
                         </div>
@@ -717,17 +709,17 @@ export default function YoutubeDashboardPage() {
                             <p className="text-[11px] text-slate-400 mt-0.5">영상별 형성된 실시간 조회수 규모 추이</p>
                           </div>
                           <span className="text-[11px] bg-amber-50 text-amber-700 font-bold px-2.5 py-1 rounded">
-                            평균 {(selectedChannel.avg_views || 0).toLocaleString()}회
+                            평균 {Number(selectedChannel.avg_views || 0).toLocaleString()}회
                           </span>
                         </div>
 
                         <div className="h-44 flex items-end justify-between gap-3 pt-8 pb-2 px-4">
                           {ytAnalytics.barData.map((bar, i) => {
-                            const heightPct = Math.max(15, Math.round((bar.views / ytAnalytics.maxBarValue) * 100));
+                            const heightPct = Math.max(15, Math.min(100, Math.round((bar.views / ytAnalytics.maxBarValue) * 100)));
                             return (
                               <div key={i} className="flex-1 flex flex-col items-center h-full justify-end group">
                                 <div className="text-[10px] font-bold text-slate-500 opacity-0 group-hover:opacity-100 transition mb-1">
-                                  {(bar.views).toLocaleString()}
+                                  {Number(bar.views).toLocaleString()}
                                 </div>
                                 <div 
                                   style={{ height: `${heightPct}%` }}
@@ -777,7 +769,7 @@ export default function YoutubeDashboardPage() {
                             <Film size={13} /> 브랜디드 영상 (롱폼 단독)
                           </span>
                           <p className="text-3xl font-black text-slate-900 mt-2">
-                            {ytAnalytics.estLongform.toLocaleString()} <span className="text-sm font-normal text-slate-500">원</span>
+                            {Number(ytAnalytics.estLongform).toLocaleString()} <span className="text-sm font-normal text-slate-500">원</span>
                           </p>
                           <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
                             <span>CPV 기준</span>
@@ -790,7 +782,7 @@ export default function YoutubeDashboardPage() {
                             <Zap size={13} /> 유튜브 쇼츠 (단독 PPL)
                           </span>
                           <p className="text-3xl font-black text-slate-900 mt-2">
-                            {ytAnalytics.estShorts.toLocaleString()} <span className="text-sm font-normal text-slate-500">원</span>
+                            {Number(ytAnalytics.estShorts).toLocaleString()} <span className="text-sm font-normal text-slate-500">원</span>
                           </p>
                           <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
                             <span>가성비</span>
@@ -838,7 +830,7 @@ export default function YoutubeDashboardPage() {
                                 <td className="py-3.5 px-4 font-bold text-slate-900 flex items-center gap-2">
                                   <Flame size={14} className="text-red-500" /> 시청자 도달력
                                 </td>
-                                <td className="py-3.5 px-4 font-bold text-red-600">평균 {(selectedChannel.avg_views || 0).toLocaleString()}회</td>
+                                <td className="py-3.5 px-4 font-bold text-red-600">평균 {Number(selectedChannel.avg_views || 0).toLocaleString()}회</td>
                                 <td className="py-3.5 px-4">
                                   <span className="inline-block px-2 py-0.5 rounded text-[11px] font-bold bg-red-50 text-red-700">
                                     상위 3% 대형 도달
@@ -857,25 +849,25 @@ export default function YoutubeDashboardPage() {
                                     알고리즘 확산 최적
                                   </span>
                                 </td>
-                                <td className="py-3.5 px-4 text-slate-600">유튜브 쇼츠 챌린지 / 프로모션 링크 노출</td>
+                                <td className="py-3.5 px-4 text-slate-600">유튜브 쇼츠 챌린지 / 프로모션 노출</td>
                                 <td className="py-3.5 px-4 text-right font-bold text-amber-600">★★★★☆</td>
                               </tr>
                               <tr>
                                 <td className="py-3.5 px-4 font-bold text-slate-900 flex items-center gap-2">
                                   <TrendingUp size={14} className="text-purple-500" /> 시청자 참여 전환
                                 </td>
-                                <td className="py-3.5 px-4 font-bold text-purple-600">{selectedChannel.engagement_rate || 3.8}%</td>
+                                <td className="py-3.5 px-4 font-bold text-purple-600">{Number(selectedChannel.engagement_rate || 3.8)}%</td>
                                 <td className="py-3.5 px-4">
                                   <span className="inline-block px-2 py-0.5 rounded text-[11px] font-bold bg-purple-50 text-purple-700">
                                     고관여 소통형
                                   </span>
                                 </td>
-                                <td className="py-3.5 px-4 text-slate-600">더보기란 할인 쿠폰 코드 / 고정댓글 유입</td>
+                                <td className="py-3.5 px-4 text-slate-600">더보기란 쿠폰 코드 / 고정댓글 유입</td>
                                 <td className="py-3.5 px-4 text-right font-bold text-purple-600">★★★★★</td>
                               </tr>
                               <tr>
                                 <td className="py-3.5 px-4 font-bold text-slate-900 flex items-center gap-2">
-                                  <ShieldCheck size={14} className="text-emerald-500" /> 브랜드 안전성
+                                  <Target size={14} className="text-emerald-500" /> 브랜드 안전성
                                 </td>
                                 <td className="py-3.5 px-4 font-bold text-slate-800">이탈률 최저</td>
                                 <td className="py-3.5 px-4">
