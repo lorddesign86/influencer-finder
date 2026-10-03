@@ -6,7 +6,7 @@ import {
   Search, Lock, Mail, ExternalLink, Tag, ArrowUpDown, 
   Users, Eye, TrendingUp, DollarSign, Award, BarChart3, 
   Globe, Film, Sparkles, FileText,
-  Target, Zap, Flame, Activity, PieChart
+  Target, Zap, Flame, Activity, PieChart, ShieldCheck
 } from 'lucide-react';
 
 interface Influencer {
@@ -181,6 +181,7 @@ export default function YoutubeDashboardPage() {
     return list.slice(0, 15);
   }, [influencers, posts, search, ytTag, subRange, ytSort, isProUser]);
 
+  // 정밀 프로페셔널 분석 모델
   const ytAnalytics = useMemo(() => {
     const subs = Number(selectedChannel?.follower_count) || 1;
     const views = Number(selectedChannel?.avg_views) || Math.max(1000, Math.round(subs * 0.15));
@@ -519,6 +520,7 @@ export default function YoutubeDashboardPage() {
                 </div>
               )}
 
+              {/* ---------------- 탭 2: 시청자분석 PRO (도넛 게이지 & 인구통계 바 차트) ---------------- */}
               {activeTab === 'audience' && (
                 <div className="space-y-6">
                   {!isProUser ? (
@@ -526,7 +528,7 @@ export default function YoutubeDashboardPage() {
                       <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mb-4 text-blue-600">
                         <Globe size={32} />
                       </div>
-                      <h3 className="text-lg font-black text-slate-900">시청자 인구통계 및 타깃 도달 분석은 PRO 전용입니다</h3>
+                      <h3 className="text-lg font-black text-slate-900">시청자 인구통계 및 알고리즘 분석은 PRO 전용입니다</h3>
                       <button
                         type="button"
                         onClick={() => setIsProUser(true)}
@@ -536,28 +538,98 @@ export default function YoutubeDashboardPage() {
                       </button>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-5 gap-6">
-                      <div className="col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs flex flex-col justify-between">
-                        <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5 mb-2">
-                          <Globe className="text-blue-600" size={15} /> 주요 시청 국가 비중
-                        </h4>
-                        <div className="py-4 flex flex-col items-center justify-center relative">
-                          <div className="w-32 h-32 rounded-full border-[10px] border-indigo-400 border-t-blue-600 flex items-center justify-center shadow-inner">
-                            <span className="text-xl font-black text-slate-900">84.2%</span>
+                    <>
+                      <div className="grid grid-cols-5 gap-6">
+                        <div className="col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs flex flex-col justify-between">
+                          <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5 mb-2">
+                            <Globe className="text-blue-600" size={15} /> 주요 시청 국가 비중
+                          </h4>
+                          <div className="py-4 flex flex-col items-center justify-center relative">
+                            <div className="w-32 h-32 rounded-full border-[10px] border-indigo-400 border-t-blue-600 border-r-blue-600 flex items-center justify-center shadow-inner">
+                              <div className="flex flex-col items-center">
+                                <span className="text-[11px] text-slate-400 font-medium">대한민국</span>
+                                <span className="text-xl font-black text-slate-900">84.2%</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="col-span-3 bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs flex flex-col justify-between">
+                          <div>
+                            <div className="flex items-center justify-between mb-3">
+                              <div>
+                                <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                                  <TrendingUp className="text-blue-600" size={15} /> 알고리즘 도달 지수 (Reach Level)
+                                </h4>
+                                <p className="text-[11px] text-slate-400 mt-0.5">구독자 규모 대비 평균 조회수 바이럴 전환율</p>
+                              </div>
+                              <span className="text-sm font-black text-blue-600">{ytAnalytics.reachPower}% (최상위 팬덤)</span>
+                            </div>
+
+                            <div className="relative pt-4 pb-2">
+                              <div className="w-full h-3 rounded-full bg-slate-100 flex overflow-hidden">
+                                <div className="w-1/3 bg-slate-300"></div>
+                                <div className="w-1/3 bg-blue-300"></div>
+                                <div className="w-1/3 bg-blue-600"></div>
+                              </div>
+                              <div 
+                                style={{ left: `${Math.min(95, Math.max(5, (ytAnalytics.reachPower / 40) * 100))}%` }}
+                                className="absolute top-1 -translate-x-1/2 flex flex-col items-center"
+                              >
+                                <span className="text-[10px] font-black text-blue-700 bg-blue-100 px-1.5 py-0.2 rounded shadow-2xs whitespace-nowrap">
+                                  도달력 {ytAnalytics.reachPower}%
+                                </span>
+                                <div className="w-1.5 h-1.5 bg-blue-700 rotate-45 -mt-0.5"></div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="p-3 bg-blue-50/70 rounded-xl border border-blue-100 mt-4 text-xs text-blue-900 leading-relaxed">
+                            💡 <strong>정밀 진단:</strong> 구독자 대비 조회수 전환율이 <strong>{ytAnalytics.reachPower}%</strong>로, 알고리즘 추천 피드 점유율이 매우 뛰어납니다.
                           </div>
                         </div>
                       </div>
-                      <div className="col-span-3 bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs flex flex-col justify-between">
+
+                      {/* 성별 및 연령대 통계 바 차트 */}
+                      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-4">
                         <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                          <TrendingUp className="text-blue-600" size={15} /> 알고리즘 도달 지수 (Reach Level)
+                          <Activity className="text-indigo-600" size={15} /> 핵심 시청자층 연령 & 성별 인구통계 (Demographics)
                         </h4>
-                        <p className="text-2xl font-black text-blue-600 mt-2">{ytAnalytics.reachPower}%</p>
+                        <div className="grid grid-cols-2 gap-8 pt-2">
+                          <div>
+                            <div className="flex justify-between text-xs font-bold mb-2">
+                              <span className="text-blue-600">남성 62%</span>
+                              <span className="text-rose-500">여성 38%</span>
+                            </div>
+                            <div className="w-full h-4 rounded-full bg-slate-100 flex overflow-hidden">
+                              <div className="bg-blue-500 h-full w-[62%]"></div>
+                              <div className="bg-rose-400 h-full w-[38%]"></div>
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            {[
+                              { age: '18-24세', pct: 18, color: 'bg-indigo-300' },
+                              { age: '25-34세 (핵심구매층)', pct: 46, color: 'bg-blue-600' },
+                              { age: '35-44세', pct: 24, color: 'bg-indigo-400' },
+                              { age: '45세 이상', pct: 12, color: 'bg-slate-300' }
+                            ].map((row, idx) => (
+                              <div key={idx} className="flex items-center gap-3 text-xs">
+                                <span className="w-32 font-semibold text-slate-600 text-[11px] truncate">{row.age}</span>
+                                <div className="flex-1 h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                                  <div style={{ width: `${row.pct}%` }} className={`h-full ${row.color}`}></div>
+                                </div>
+                                <span className="w-8 font-bold text-slate-800 text-right text-[11px]">{row.pct}%</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    </>
                   )}
                 </div>
               )}
 
+              {/* ---------------- 탭 3: 수익분석 PRO (6개월 매출 추이 및 막대 차트) ---------------- */}
               {activeTab === 'revenue' && (
                 <div className="space-y-6">
                   {!isProUser ? (
@@ -575,16 +647,51 @@ export default function YoutubeDashboardPage() {
                       </button>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-3 gap-4">
-                      <div className="bg-white p-5 rounded-2xl border-2 border-amber-100 shadow-2xs">
-                        <span className="text-[11px] font-bold text-amber-600">월간 예상 애드센스 매출</span>
-                        <p className="text-3xl font-black text-slate-900 mt-2">{Number(ytAnalytics.baseMonthlyAd).toLocaleString()}원</p>
+                    <>
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className="bg-white p-5 rounded-2xl border-2 border-amber-100 shadow-2xs">
+                          <span className="text-[11px] font-bold text-amber-600">월간 예상 애드센스 매출</span>
+                          <p className="text-3xl font-black text-slate-900 mt-2">{Number(ytAnalytics.baseMonthlyAd).toLocaleString()}원</p>
+                        </div>
+                        <div className="bg-white p-5 rounded-2xl border-2 border-slate-200 shadow-2xs">
+                          <span className="text-[11px] font-bold text-slate-500">건당 순수 광고 배분액</span>
+                          <p className="text-3xl font-black text-slate-900 mt-2">{Math.round(ytAnalytics.baseMonthlyAd / 4).toLocaleString()}원</p>
+                        </div>
+                        <div className="bg-white p-5 rounded-2xl border-2 border-purple-100 shadow-2xs">
+                          <span className="text-[11px] font-bold text-purple-600">채널 밸류에이션 스코어</span>
+                          <p className="text-3xl font-black text-purple-600 mt-2">{ytAnalytics.score}점</p>
+                        </div>
                       </div>
-                    </div>
+
+                      {/* 6개월 매출 추이 막대 차트 */}
+                      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs">
+                        <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5 mb-2">
+                          <BarChart3 className="text-amber-500" size={15} /> 최근 6개월간 월별 애드센스 매출 추이
+                        </h4>
+                        <div className="h-44 flex items-end justify-between gap-4 pt-8 pb-2 px-6">
+                          {ytAnalytics.monthlyTrend.map((m, idx) => {
+                            const heightPct = Math.max(20, Math.min(100, Math.round((m.rev / ytAnalytics.maxMonthlyRev) * 100)));
+                            return (
+                              <div key={idx} className="flex-1 flex flex-col items-center h-full justify-end group">
+                                <div className="text-[10px] font-bold text-amber-600 opacity-0 group-hover:opacity-100 transition mb-1.5 whitespace-nowrap">
+                                  {m.rev.toLocaleString()}원
+                                </div>
+                                <div 
+                                  style={{ height: `${heightPct}%` }}
+                                  className="w-full rounded-t-lg bg-gradient-to-t from-amber-400 to-yellow-400 transition duration-300 shadow-xs"
+                                ></div>
+                                <span className="text-[11px] text-slate-500 font-semibold mt-2.5">{m.month}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </>
                   )}
                 </div>
               )}
 
+              {/* ---------------- 탭 4: 광고단가분석 PRO (단가 카드 & 캠페인 비교 표) ---------------- */}
               {activeTab === 'ad_price' && (
                 <div className="space-y-6">
                   {!isProUser ? (
@@ -602,12 +709,65 @@ export default function YoutubeDashboardPage() {
                       </button>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-3 gap-4">
-                      <div className="bg-white p-5 rounded-2xl border-2 border-red-100 shadow-2xs">
-                        <span className="text-[11px] font-bold text-red-500">브랜디드 영상 단가</span>
-                        <p className="text-3xl font-black text-slate-900 mt-2">{Number(ytAnalytics.estLongform).toLocaleString()}원</p>
+                    <>
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className="bg-white p-5 rounded-2xl border-2 border-red-100 shadow-2xs">
+                          <span className="text-[11px] font-bold text-red-500">브랜디드 영상 단가</span>
+                          <p className="text-3xl font-black text-slate-900 mt-2">{Number(ytAnalytics.estLongform).toLocaleString()}원</p>
+                        </div>
+                        <div className="bg-white p-5 rounded-2xl border-2 border-rose-100 shadow-2xs">
+                          <span className="text-[11px] font-bold text-rose-600">유튜브 쇼츠 단독 PPL</span>
+                          <p className="text-3xl font-black text-slate-900 mt-2">{Number(ytAnalytics.estShorts).toLocaleString()}원</p>
+                        </div>
+                        <div className="bg-white p-5 rounded-2xl border-2 border-blue-100 shadow-2xs">
+                          <span className="text-[11px] font-bold text-blue-600">기획 PPL 단순 노출</span>
+                          <p className="text-3xl font-black text-slate-900 mt-2">{Number(ytAnalytics.estPpl).toLocaleString()}원</p>
+                        </div>
                       </div>
-                    </div>
+
+                      {/* 캠페인 유형별 제휴 조건 비교 표 */}
+                      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs">
+                        <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5 mb-4">
+                          <PieChart className="text-red-500" size={16} /> 캠페인 유형별 제휴 조건 및 권장 패키지
+                        </h4>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs text-left">
+                            <thead className="bg-slate-50 text-slate-500 font-semibold border-y border-slate-100">
+                              <tr>
+                                <th className="py-3 px-4">캠페인 유형</th>
+                                <th className="py-3 px-4">제작 형태</th>
+                                <th className="py-3 px-4">추정 견적</th>
+                                <th className="py-3 px-4">보장 혜택</th>
+                                <th className="py-3 px-4 text-right">예상 광고 효율</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 font-medium">
+                              <tr>
+                                <td className="py-3.5 px-4 font-bold text-slate-900">단독 브랜디드 기획</td>
+                                <td className="py-3.5 px-4 text-slate-600">8~12분 풀 영상 기획 취재</td>
+                                <td className="py-3.5 px-4 font-bold text-red-600">{ytAnalytics.estLongform.toLocaleString()}원</td>
+                                <td className="py-3.5 px-4 text-slate-600">고정댓글 1순위 + 링크 영구 보존</td>
+                                <td className="py-3.5 px-4 text-right font-bold text-emerald-600">최고 (★★★★★)</td>
+                              </tr>
+                              <tr>
+                                <td className="py-3.5 px-4 font-bold text-slate-900">유튜브 쇼츠 바이럴</td>
+                                <td className="py-3.5 px-4 text-slate-600">60초 숏폼 직관 소개</td>
+                                <td className="py-3.5 px-4 font-bold text-rose-600">{ytAnalytics.estShorts.toLocaleString()}원</td>
+                                <td className="py-3.5 px-4 text-slate-600">알고리즘 급상승 피드 공략</td>
+                                <td className="py-3.5 px-4 text-right font-bold text-emerald-600">우수 (★★★★☆)</td>
+                              </tr>
+                              <tr>
+                                <td className="py-3.5 px-4 font-bold text-slate-900">기획 PPL 단순 노출</td>
+                                <td className="py-3.5 px-4 text-slate-600">본문 중 60~90초 노출</td>
+                                <td className="py-3.5 px-4 font-bold text-blue-600">{ytAnalytics.estPpl.toLocaleString()}원</td>
+                                <td className="py-3.5 px-4 text-slate-600">제품 실사용 후기 자연 유입</td>
+                                <td className="py-3.5 px-4 text-right font-bold text-slate-600">보통 (★★★☆☆)</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </>
                   )}
                 </div>
               )}
