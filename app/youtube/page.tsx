@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { 
-  Search, Mail, Tag, ArrowUpDown, ChevronRight, Eye, ThumbsUp, MessageSquare, PlaySquare, Users 
+  Search, Mail, Tag, ArrowUpDown, ChevronRight, Eye, ThumbsUp, MessageSquare, PlaySquare, Users, Lock, Sparkles 
 } from 'lucide-react';
 
 interface YoutubeInfluencer {
@@ -46,12 +46,8 @@ export default function YoutubeDashboardPage() {
     const fetchYoutubeData = async () => {
       setLoading(true);
       try {
-        // 테이블 이름이나 데이터 로딩 오류 방지를 위한 안전한 쿼리
-        const { data: cData, error: cErr } = await supabase.from('youtube_channels').select('*').limit(300);
-        const { data: vData, error: vErr } = await supabase.from('youtube_videos').select('*').limit(1500);
-
-        if (cErr) console.error('Youtube channels fetch error:', cErr);
-        if (vErr) console.error('Youtube videos fetch error:', vErr);
+        const { data: cData } = await supabase.from('youtube_channels').select('*').limit(300);
+        const { data: vData } = await supabase.from('youtube_videos').select('*').limit(1500);
 
         if (cData) setChannels(cData as YoutubeInfluencer[]);
         
@@ -71,18 +67,29 @@ export default function YoutubeDashboardPage() {
     fetchYoutubeData();
   }, []);
 
-  // ★ 검색 및 태그 필터 (0건이 나오지 않도록 유연하게 완화)
-  const filteredChannels = useMemo(() => {
-    return channels.filter((item) => {
-      const q = search.trim().toLowerCase();
-      const tags = Array.isArray(item.tags) ? item.tags.map(t => (t || '').toLowerCase()) : [];
+  // ★ 기본 메인 화면 및 검색 필터링 로직
+  const displayedChannels = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    
+    // 1. 검색어나 태그가 없을 경우: 구독자 50만 이상인 채널 중 랜덤 5개 추출
+    if (!q && selectedTag === '전체') {
+      const over500k = channels.filter(c => (c.subscriber_count || 0) >= 500000);
+      const targetPool = over500k.length >= 5 ? over500k : channels; // 50만 이상이 없으면 전체에서 추출
       
+      // 랜덤 셔플 후 5개 반환
+      const shuffled = [...targetPool].sort(() => 0.5 - Math.random());
+      return { list: shuffled.slice(0, 5), isDefaultRandom: true };
+    }
+
+    // 2. 검색어 또는 태그가 있을 경우: 전체 대상 필터링
+    const filtered = channels.filter((item) => {
+      const tags = Array.isArray(item.tags) ? item.tags.map(t => (t || '').toLowerCase()) : [];
       const matchesCat = selectedTag === '전체' || 
         tags.some(t => t.includes(selectedTag.toLowerCase())) || 
         (item.name || '').toLowerCase().includes(selectedTag.toLowerCase());
 
       if (!matchesCat) return false;
-      if (!q) return true; // 검색어 없으면 카테고리 내 전체 노출
+      if (!q) return true;
 
       const keywords = q.split(/\s+/).filter(Boolean);
       const nameRaw = (item.name || '').toLowerCase();
@@ -94,6 +101,9 @@ export default function YoutubeDashboardPage() {
         tags.some(t => t.includes(kw))
       );
     });
+
+    // 무료 회원이면 최대 5개까지만 보여주고 PRO 유도로 끊어줄 수 있음 (선택 사항)
+    return { list: filtered, isDefaultRandom: false };
   }, [channels, search, selectedTag]);
 
   const handleOpenDetail = (channelId: string) => {
@@ -147,21 +157,32 @@ export default function YoutubeDashboardPage() {
 
       {/* 채널 리스트 피드 */}
       <div className="max-w-5xl mx-auto w-full p-8 space-y-4">
+        
+        {/* 안내 배너 (기본 화면일 때) */}
+        {displayedChannels.isDefaultRandom && (
+          <div className="bg-gradient-to-r from-red-50 to-rose-50 border border-red-200 p-4 rounded-2xl flex items-center justify-between text-xs text-red-900 shadow-2xs">
+            <div className="flex items-center gap-2 font-bold">
+              <Sparkles size={16} className="text-red-600" />
+              <span>실시간 추천 50만+ 구독자 대형 유튜버 파워 채널 (랜덤 5선)</span>
+            </div>
+            <span className="text-[11px] text-red-600 font-semibold">검색창에서 원하는 키워드를 입력해 보세요!</span>
+          </div>
+        )}
+
         <div className="text-xs text-slate-500 font-semibold px-1">
-          <span>검색된 유튜브 크리에이터 ({filteredChannels.length}명)</span>
+          <span>검색된 유튜브 크리에이터 ({displayedChannels.list.length}명)</span>
         </div>
 
         {loading ? (
           <div className="p-20 text-center text-sm text-slate-400">유튜버 데이터를 불러오는 중...</div>
-        ) : filteredChannels.length === 0 ? (
+        ) : displayedChannels.list.length === 0 ? (
           <div className="p-20 text-center text-sm text-slate-400 bg-white rounded-2xl border border-slate-200">일치하는 유튜버가 없습니다. 검색어를 짧게 입력해 보세요.</div>
         ) : (
-          filteredChannels.map((channel) => {
+          displayedChannels.list.map((channel) => {
             const cKey = String(channel.channel_id || '').trim().toLowerCase();
             const vList = videosMap[cKey] || [];
             const estPrice = Math.round(((channel.subscriber_count || 10000) * 0.05 + (channel.total_view_count || 50000) * 0.001) / 10000) * 10000;
 
-            // 영상이 부족할 경우 예쁜 대체 썸네일 제공
             const fallbackThumbs = [
               'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=300',
               'https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d?w=300',
@@ -252,6 +273,29 @@ export default function YoutubeDashboardPage() {
             );
           })
         )}
+
+        {/* ★ 하단 PRO 버전 이용시 더 많은 리스트 보기 버튼 섹션 */}
+        {!isProUser && (
+          <div className="bg-white rounded-3xl border border-slate-200 p-8 text-center space-y-4 shadow-xs mt-8">
+            <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-2xl mx-auto flex items-center justify-center font-bold">
+              <Lock size={22} />
+            </div>
+            <div className="space-y-1 max-w-md mx-auto">
+              <h3 className="text-sm font-black text-slate-900">더 많은 유튜브 인플루언서 리스트가 기다리고 있습니다</h3>
+              <p className="text-xs text-slate-500">
+                무료 버전에서는 샘플 채널만 제공됩니다. PRO 플랜으로 업그레이드하고 1,000명 이상의 전체 크리에이터 데이터베이스와 상세 지표를 무제한으로 탐색하세요!
+              </p>
+            </div>
+            <button 
+              type="button"
+              onClick={() => setIsProUser(true)}
+              className="px-6 py-3 bg-gradient-to-r from-red-600 to-rose-500 text-white text-xs font-bold rounded-2xl shadow-md hover:opacity-95 transition cursor-pointer"
+            >
+              👑 PRO 버전 이용하고 전체 리스트 보기
+            </button>
+          </div>
+        )}
+
       </div>
     </div>
   );
