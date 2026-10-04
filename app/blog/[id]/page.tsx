@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { 
   ArrowLeft, Mail, Heart, MessageSquare, ShieldCheck, 
-  BarChart3, Hash, X, PieChart, Sparkles, TrendingUp, Award, Zap, CheckCircle2, DollarSign, Activity, Layers, Globe
+  BarChart3, Hash, X, PieChart, Sparkles, TrendingUp, Zap, Calendar, DollarSign, Activity, Layers
 } from 'lucide-react';
 
 interface BlogInfluencer {
@@ -66,6 +66,8 @@ export default function BlogDetailPage() {
 
         if (bData) setBlogger(bData as BlogInfluencer);
         if (pData) setPosts(pData as BlogPost[]);
+      } catch (err) {
+        console.error('Detail fetch error:', err);
       } finally {
         setLoading(false);
       }
@@ -81,8 +83,8 @@ export default function BlogDetailPage() {
     return <div className="h-screen flex items-center justify-center text-sm text-slate-400 bg-[#f8f9fa]">해당 블로그 정보를 찾을 수 없습니다.</div>;
   }
 
-  const avgLikes = blogger.avg_likes ?? blogger.recent_10_avg_likes ?? 48;
-  const avgComments = blogger.avg_comments ?? blogger.recent_10_avg_comments ?? 14;
+  const avgLikes = blogger.recent_10_avg_likes ?? 48;
+  const avgComments = blogger.recent_10_avg_comments ?? 14;
   const engRate = blogger.engagement_rate ?? 4.8;
   const estPrice = Math.round(((blogger.daily_visitors || 1200) * 25 + (blogger.fan_count || 1000) * 20) / 10000) * 10000;
   const score = Math.min(99, Math.max(68, Math.round(72 + engRate * 3)));
@@ -90,7 +92,7 @@ export default function BlogDetailPage() {
   return (
     <div className="flex-1 flex flex-col h-full bg-[#f8f9fa] overflow-y-auto text-slate-800">
       
-      {/* Vling 스타일 상단 헤더 바 */}
+      {/* 상단 네비게이션 */}
       <div className="bg-white border-b border-slate-200 px-8 py-3 sticky top-0 z-30 flex items-center justify-between shadow-2xs">
         <button 
           onClick={() => router.back()}
@@ -107,7 +109,7 @@ export default function BlogDetailPage() {
             <Hash size={14} /> 포스팅 키워드 분석
           </button>
           <a 
-            href={`mailto:contact@findlist.co.kr?subject=[광고문의] ${blogger.name} 채널 협업 문의`}
+            href={`mailto:contact@findlist.co.kr?subject=[광고문의] ${blogger.name || blogger.blog_id} 채널 협업 문의`}
             className="flex items-center gap-1.5 text-xs font-bold px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-500 text-white rounded-xl hover:opacity-95 transition shadow-sm cursor-pointer"
           >
             <Mail size={14} /> 광고 문의하기
@@ -117,7 +119,7 @@ export default function BlogDetailPage() {
 
       <div className="max-w-6xl mx-auto w-full p-8 space-y-6">
         
-        {/* 채널 프로필 인포 카드 (Vling 상단 요약 스타일) */}
+        {/* 프로필 요약 카드 */}
         <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div className="flex items-center gap-4">
             <img 
@@ -134,7 +136,7 @@ export default function BlogDetailPage() {
               </div>
               <p className="text-xs text-slate-400">@{blogger.handle || blogger.blog_id} • 네이버 공식 인플루언서</p>
               <div className="flex flex-wrap gap-1.5 pt-1">
-                {(blogger.tags || ['인플루언서']).map((t, i) => (
+                {(Array.isArray(blogger.tags) ? blogger.tags : ['인플루언서']).map((t, i) => (
                   <span key={i} className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100">
                     #{t}
                   </span>
@@ -143,7 +145,6 @@ export default function BlogDetailPage() {
             </div>
           </div>
 
-          {/* 우측 핵심 지수 뱃지들 */}
           <div className="flex items-center gap-3">
             <div className="bg-slate-50 px-4 py-3 rounded-2xl border border-slate-100 text-center">
               <span className="text-[10px] font-bold text-slate-400 block">협업 매칭 스코어</span>
@@ -156,7 +157,7 @@ export default function BlogDetailPage() {
           </div>
         </div>
 
-        {/* Vling 스타일 탭 네비게이션: 채널 / 콘텐츠 / 광고단가 */}
+        {/* 탭 네비게이션: 채널 / 콘텐츠 / 광고단가 */}
         <div className="flex gap-2 border-b border-slate-200 pb-2">
           <button 
             onClick={() => setActiveTab('channel')} 
@@ -184,10 +185,9 @@ export default function BlogDetailPage() {
           </button>
         </div>
 
-        {/* ================= TAB 1: 채널 분석 (Channel) ================= */}
+        {/* TAB 1: 채널 분석 */}
         {activeTab === 'channel' && (
           <div className="space-y-6">
-            {/* 4대 핵심 지표 카드 */}
             <div className="grid grid-cols-4 gap-4">
               <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-2xs space-y-1">
                 <span className="text-xs font-bold text-slate-400">인플루언서 팬 수</span>
@@ -203,14 +203,14 @@ export default function BlogDetailPage() {
                   <Zap size={12} /> 안정적 트래픽 유입
                 </div>
               </div>
-              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-1">
+              <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-2xs space-y-1">
                 <span className="text-xs font-bold text-slate-400">블로그 이웃 수</span>
                 <p className="text-2xl font-black text-slate-900">{(blogger.follower_count || 0).toLocaleString()}명</p>
                 <div className="flex items-center gap-1 text-[11px] text-slate-500 font-bold pt-1">
                   고정 구독자층 보유
                 </div>
               </div>
-              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-1">
+              <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-2xs space-y-1">
                 <span className="text-xs font-bold text-slate-400">평균 공감 / 댓글</span>
                 <p className="text-2xl font-black text-slate-900">{avgLikes} <span className="text-xs font-normal text-slate-400">/ {avgComments}</span></p>
                 <div className="flex items-center gap-1 text-[11px] text-purple-600 font-bold pt-1">
@@ -219,7 +219,6 @@ export default function BlogDetailPage() {
               </div>
             </div>
 
-            {/* 알고리즘 진단 박스 */}
             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-2xs space-y-4">
               <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
                 <ShieldCheck className="text-green-600" size={18} /> 네이버 C-Rank 및 D.I.A.+ 검색 알고리즘 진단
@@ -240,7 +239,7 @@ export default function BlogDetailPage() {
           </div>
         )}
 
-        {/* ================= TAB 2: 콘텐츠 피드 (Content) ================= */}
+        {/* TAB 2: 콘텐츠 피드 */}
         {activeTab === 'content' && (
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-2xs space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
@@ -249,39 +248,43 @@ export default function BlogDetailPage() {
             </div>
 
             <div className="space-y-3">
-              {posts.map((p, idx) => (
-                <a 
-                  key={idx} 
-                  href={p.post_url || '#'} 
-                  target="_blank" 
-                  rel="noreferrer" 
-                  className="group bg-slate-50 hover:bg-white p-4 rounded-2xl border border-slate-100 hover:border-slate-300 hover:shadow-md transition flex gap-4 items-center block"
-                >
-                  <img 
-                    src={p.thumbnail_url || 'https://images.unsplash.com/photo-1499750310107-5fef28a66643?w=300'} 
-                    alt="" 
-                    referrerPolicy="no-referrer" 
-                    className="w-28 h-20 rounded-xl object-cover bg-slate-200 flex-shrink-0 group-hover:scale-102 transition duration-300" 
-                  />
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] bg-slate-200 text-slate-700 font-bold px-2 py-0.5 rounded">#{idx + 1} 포스트</span>
-                      <span className="text-[10px] text-slate-400"><Calendar size={10} className="inline mr-0.5" />{p.published_at || '2026.10.01'}</span>
+              {posts.length > 0 ? (
+                posts.map((p, idx) => (
+                  <a 
+                    key={idx} 
+                    href={p.post_url || '#'} 
+                    target="_blank" 
+                    rel="noreferrer" 
+                    className="group bg-slate-50 hover:bg-white p-4 rounded-2xl border border-slate-100 hover:border-slate-300 hover:shadow-md transition flex gap-4 items-center block"
+                  >
+                    <img 
+                      src={p.thumbnail_url || 'https://images.unsplash.com/photo-1499750310107-5fef28a66643?w=300'} 
+                      alt="" 
+                      referrerPolicy="no-referrer" 
+                      className="w-28 h-20 rounded-xl object-cover bg-slate-200 flex-shrink-0 group-hover:scale-102 transition duration-300" 
+                    />
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] bg-slate-200 text-slate-700 font-bold px-2 py-0.5 rounded">#{idx + 1} 포스트</span>
+                        <span className="text-[10px] text-slate-400"><Calendar size={10} className="inline mr-0.5" />{p.published_at || '2026.10.01'}</span>
+                      </div>
+                      <h4 className="text-xs font-bold text-slate-900 group-hover:text-green-600 transition truncate">{p.title}</h4>
+                      <p className="text-[11px] text-slate-500 line-clamp-1">{p.summary}</p>
                     </div>
-                    <h4 className="text-xs font-bold text-slate-900 group-hover:text-green-600 transition truncate">{p.title}</h4>
-                    <p className="text-[11px] text-slate-500 line-clamp-1">{p.summary}</p>
-                  </div>
-                  <div className="flex items-center gap-4 text-xs flex-shrink-0 px-4 bg-white py-3 rounded-xl border border-slate-100">
-                    <span className="text-rose-500 font-bold flex items-center gap-1"><Heart size={14} fill="currentColor" /> {p.like_count || avgLikes}</span>
-                    <span className="text-blue-500 font-bold flex items-center gap-1"><MessageSquare size={14} fill="currentColor" /> {p.comment_count || avgComments}</span>
-                  </div>
-                </a>
-              ))}
+                    <div className="flex items-center gap-4 text-xs flex-shrink-0 px-4 bg-white py-3 rounded-xl border border-slate-100">
+                      <span className="text-rose-500 font-bold flex items-center gap-1"><Heart size={14} fill="currentColor" /> {p.like_count || avgLikes}</span>
+                      <span className="text-blue-500 font-bold flex items-center gap-1"><MessageSquare size={14} fill="currentColor" /> {p.comment_count || avgComments}</span>
+                    </div>
+                  </a>
+                ))
+              ) : (
+                <div className="p-12 text-center text-xs text-slate-400">등록된 콘텐츠가 없습니다.</div>
+              )}
             </div>
           </div>
         )}
 
-        {/* ================= TAB 3: 광고단가 및 견적서 (Pricing) ================= */}
+        {/* TAB 3: 광고단가 및 견적서 */}
         {activeTab === 'pricing' && (
           <div className="space-y-6">
             <div className="grid grid-cols-3 gap-4">
@@ -302,7 +305,6 @@ export default function BlogDetailPage() {
               </div>
             </div>
 
-            {/* 캠페인 유형별 견적 비교 표 */}
             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-2xs space-y-4">
               <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
                 <PieChart className="text-emerald-600" size={18} /> 네이버 블로그 캠페인 유형별 공식 견적 및 보장 혜택
@@ -358,7 +360,7 @@ export default function BlogDetailPage() {
               <button onClick={() => setShowKeywordModal(false)} className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition cursor-pointer"><X size={16} /></button>
             </div>
             <div className="flex flex-wrap gap-2">
-              {(blogger.tags || ['여행', '맛집', '일상', '체험단']).map((t, i) => (
+              {(Array.isArray(blogger.tags) ? blogger.tags : ['여행', '맛집', '일상', '체험단']).map((t, i) => (
                 <span key={i} className="px-3.5 py-1.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold shadow-2xs">
                   #{t}
                 </span>
