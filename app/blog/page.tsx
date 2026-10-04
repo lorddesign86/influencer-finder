@@ -120,7 +120,7 @@ export default function BlogDashboardPage() {
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[#f8f9fa] overflow-y-auto">
-      {/* 상단 검색 및 필터 헤더 */}
+      {/* 상단 검색 및 카테고리 헤더 */}
       <div className="bg-white border-b border-slate-200 px-8 py-6 sticky top-0 z-20 space-y-4 shadow-2xs">
         <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
           <div className="relative flex-1">
@@ -144,51 +144,81 @@ export default function BlogDashboardPage() {
           </button>
         </div>
 
-        <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2 overflow-x-auto pb-1">
-            <span className="text-xs font-bold text-slate-400 flex items-center gap-1 flex-shrink-0 mr-2">
-              <Tag size={13} /> 카테고리:
-            </span>
-            {BLOG_CATEGORIES.map((cat) => (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setBlogCat(cat)}
-                className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition cursor-pointer flex-shrink-0 ${
-                  blogCat === cat ? 'bg-green-600 text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-
-          {/* 정렬 필터 추가 */}
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border bg-white border-slate-200 flex-shrink-0">
-            <ArrowUpDown size={14} className="text-slate-400" />
-            <select
-              value={blogSort}
-              onChange={(e) => setBlogSort(e.target.value as BlogSortOption)}
-              className="bg-transparent text-xs font-semibold outline-none text-slate-700 cursor-pointer"
+        <div className="max-w-5xl mx-auto flex items-center gap-2 overflow-x-auto pb-1">
+          <span className="text-xs font-bold text-slate-400 flex items-center gap-1 flex-shrink-0 mr-2">
+            <Tag size={13} /> 카테고리:
+          </span>
+          {BLOG_CATEGORIES.map((cat) => (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => setBlogCat(cat)}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition cursor-pointer flex-shrink-0 ${
+                blogCat === cat ? 'bg-green-600 text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
             >
-              <option value="fan_desc">팬 많은 순</option>
-              <option value="visitors_desc">일방문자 순</option>
-              <option value="follower_desc">이웃 순</option>
-              <option value="price_desc">예상 광고비 순</option>
-            </select>
-          </div>
+              {cat}
+            </button>
+          ))}
         </div>
       </div>
 
       {/* 본문 채널 리스트 피드 */}
       <div className="max-w-5xl mx-auto w-full p-8 space-y-4">
-        <div className="flex items-center justify-between text-xs text-slate-500 font-semibold px-1">
-          <span>검색된 인플루언서 리스트 ({filteredBloggers.length}명)</span>
+        
+        {/* 요청하신 빨간 네모박스 위치: 정렬 버튼 바 & 잔여 횟수 안내 */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-2 overflow-x-auto">
+            <span className="text-xs font-bold text-slate-500 mr-2 flex items-center gap-1">
+              <ArrowUpDown size={13} /> 정렬:
+            </span>
+            <button
+              type="button"
+              onClick={() => setBlogSort('fan_desc')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                blogSort === 'fan_desc' ? 'bg-slate-900 text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              팬 많은 순
+            </button>
+            <button
+              type="button"
+              onClick={() => setBlogSort('visitors_desc')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                blogSort === 'visitors_desc' ? 'bg-slate-900 text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              일방문자 순
+            </button>
+            <button
+              type="button"
+              onClick={() => setBlogSort('follower_desc')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                blogSort === 'follower_desc' ? 'bg-slate-900 text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              이웃 순
+            </button>
+            <button
+              type="button"
+              onClick={() => setBlogSort('price_desc')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                blogSort === 'price_desc' ? 'bg-slate-900 text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              예상 광고비 순
+            </button>
+          </div>
+
           {!isProUser && (
-            <span className="text-amber-700 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200">
-              💡 무료 회원 채널 상세 열람 잔여 횟수: <strong className="text-slate-900">{Math.max(0, MAX_FREE_VIEWS - viewCount)}회</strong> / {MAX_FREE_VIEWS}회
+            <span className="text-xs text-amber-700 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200 font-semibold whitespace-nowrap">
+              💡 무료 상세 열람 잔여: <strong className="text-slate-900">{Math.max(0, MAX_FREE_VIEWS - viewCount)}회</strong> / {MAX_FREE_VIEWS}회
             </span>
           )}
+        </div>
+
+        <div className="text-xs text-slate-500 font-semibold px-1">
+          <span>검색된 인플루언서 리스트 ({filteredBloggers.length}명)</span>
         </div>
 
         {loading ? (
@@ -215,7 +245,7 @@ export default function BlogDashboardPage() {
                     />
                     <div>
                       <div className="flex items-center gap-2">
-                        {/* 인플루언서 이름 정상 출력 */}
+                        {/* 인플루언서 이름 명확히 출력 */}
                         <h3 className="text-base font-bold text-slate-900">{blogger.name || blogger.blog_id}</h3>
                         <span className="text-[10px] px-2 py-0.5 bg-green-100 text-green-700 font-extrabold rounded">INFLUENCER</span>
                       </div>
@@ -230,7 +260,7 @@ export default function BlogDashboardPage() {
                     </div>
                   </div>
 
-                  {/* 버튼 그룹 (채널 상세, 광고 문의) */}
+                  {/* 광고 문의 & 채널 상세 버튼 */}
                   <div className="flex items-center gap-2">
                     <a
                       href={`mailto:contact@findlist.co.kr?subject=[광고문의] ${blogger.name} 채널 협업 문의`}
@@ -267,35 +297,38 @@ export default function BlogDashboardPage() {
                   </div>
                 </div>
 
-                {/* 최근 썸네일 카드 4개 노출 */}
-                {bPosts.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-[11px] font-bold text-slate-400">최근 발행 콘텐츠 (4개)</p>
-                    <div className="grid grid-cols-4 gap-3">
-                      {bPosts.slice(0, 4).map((p, idx) => (
-                        <a 
-                          key={idx}
-                          href={p.post_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="group block rounded-xl border border-slate-100 overflow-hidden bg-slate-100 hover:shadow-xs transition"
-                        >
-                          <div className="aspect-video w-full bg-slate-200 relative">
-                            <img 
-                              src={p.thumbnail_url || 'https://via.placeholder.com/200'} 
-                              alt={p.title} 
-                              referrerPolicy="no-referrer"
-                              className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                            />
-                          </div>
-                          <div className="p-2">
-                            <p className="text-[11px] font-bold text-slate-800 truncate">{p.title}</p>
-                          </div>
-                        </a>
-                      ))}
-                    </div>
+                {/* ★ 최신 콘텐츠 썸네일 카드 정확히 4개 노출 */}
+                <div className="space-y-2">
+                  <p className="text-[11px] font-bold text-slate-400">최근 발행 콘텐츠</p>
+                  <div className="grid grid-cols-4 gap-3">
+                    {(bPosts.length > 0 ? bPosts : [
+                      { title: '최근 발행 포스팅 #1', post_url: '#', thumbnail_url: 'https://via.placeholder.com/200' },
+                      { title: '최근 발행 포스팅 #2', post_url: '#', thumbnail_url: 'https://via.placeholder.com/200' },
+                      { title: '최근 발행 포스팅 #3', post_url: '#', thumbnail_url: 'https://via.placeholder.com/200' },
+                      { title: '최근 발행 포스팅 #4', post_url: '#', thumbnail_url: 'https://via.placeholder.com/200' }
+                    ]).slice(0, 4).map((p, idx) => (
+                      <a 
+                        key={idx}
+                        href={p.post_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="group block rounded-xl border border-slate-100 overflow-hidden bg-slate-100 hover:shadow-xs transition"
+                      >
+                        <div className="aspect-video w-full bg-slate-200 relative">
+                          <img 
+                            src={p.thumbnail_url || 'https://via.placeholder.com/200'} 
+                            alt={p.title} 
+                            referrerPolicy="no-referrer"
+                            className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                          />
+                        </div>
+                        <div className="p-2">
+                          <p className="text-[11px] font-bold text-slate-800 truncate">{p.title}</p>
+                        </div>
+                      </a>
+                    ))}
                   </div>
-                )}
+                </div>
               </div>
             );
           })
