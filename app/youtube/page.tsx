@@ -46,10 +46,15 @@ export default function YoutubeDashboardPage() {
     const fetchYoutubeData = async () => {
       setLoading(true);
       try {
-        const { data: cData } = await supabase.from('youtube_channels').select('*').limit(200);
-        const { data: vData } = await supabase.from('youtube_videos').select('*').limit(1000);
+        // 테이블 이름이나 데이터 로딩 오류 방지를 위한 안전한 쿼리
+        const { data: cData, error: cErr } = await supabase.from('youtube_channels').select('*').limit(300);
+        const { data: vData, error: vErr } = await supabase.from('youtube_videos').select('*').limit(1500);
+
+        if (cErr) console.error('Youtube channels fetch error:', cErr);
+        if (vErr) console.error('Youtube videos fetch error:', vErr);
 
         if (cData) setChannels(cData as YoutubeInfluencer[]);
+        
         if (vData) {
           const map: Record<string, YoutubeVideo[]> = {};
           vData.forEach((v: YoutubeVideo) => {
@@ -66,37 +71,45 @@ export default function YoutubeDashboardPage() {
     fetchYoutubeData();
   }, []);
 
+  // ★ 검색 및 태그 필터 (0건이 나오지 않도록 유연하게 완화)
   const filteredChannels = useMemo(() => {
     return channels.filter((item) => {
       const q = search.trim().toLowerCase();
-      const tags = Array.isArray(item.tags) ? item.tags.map(t => t.toLowerCase()) : [];
-      const matchesCat = selectedTag === '전체' || tags.some(t => t.includes(selectedTag.toLowerCase()));
-      if (!matchesCat) return false;
-      if (!q) return true;
+      const tags = Array.isArray(item.tags) ? item.tags.map(t => (t || '').toLowerCase()) : [];
+      
+      const matchesCat = selectedTag === '전체' || 
+        tags.some(t => t.includes(selectedTag.toLowerCase())) || 
+        (item.name || '').toLowerCase().includes(selectedTag.toLowerCase());
 
-      return (
-        (item.name || '').toLowerCase().includes(q) ||
-        (item.handle || '').toLowerCase().includes(q) ||
-        tags.some(t => t.includes(q))
+      if (!matchesCat) return false;
+      if (!q) return true; // 검색어 없으면 카테고리 내 전체 노출
+
+      const keywords = q.split(/\s+/).filter(Boolean);
+      const nameRaw = (item.name || '').toLowerCase();
+      const handleRaw = (item.handle || item.channel_id || '').toLowerCase();
+
+      return keywords.some(kw => 
+        nameRaw.includes(kw) || 
+        handleRaw.includes(kw) || 
+        tags.some(t => t.includes(kw))
       );
     });
   }, [channels, search, selectedTag]);
 
-  // ★ 새로운 상세 페이지로 이동하는 핸들러 함수
   const handleOpenDetail = (channelId: string) => {
     router.push(`/youtube/${channelId}`);
   };
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[#f8f9fa] overflow-y-auto">
-      {/* 상단 검색 및 카테고리 헤더 */}
+      {/* 상단 검색 및 태그 헤더 */}
       <div className="bg-white border-b border-slate-200 px-8 py-6 sticky top-0 z-20 space-y-4 shadow-2xs">
         <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
           <div className="relative flex-1">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
             <input 
               type="text" 
-              placeholder="키워드 검색 (예: 해외여행 준비물, 브이로그...)" 
+              placeholder="키워드 검색 (예: 해외여행 준비물, 브이로그, 맛집...)" 
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-12 pr-4 py-3 border border-slate-200 rounded-full text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500 transition shadow-inner"
@@ -141,12 +154,20 @@ export default function YoutubeDashboardPage() {
         {loading ? (
           <div className="p-20 text-center text-sm text-slate-400">유튜버 데이터를 불러오는 중...</div>
         ) : filteredChannels.length === 0 ? (
-          <div className="p-20 text-center text-sm text-slate-400 bg-white rounded-2xl border border-slate-200">일치하는 유튜버가 없습니다.</div>
+          <div className="p-20 text-center text-sm text-slate-400 bg-white rounded-2xl border border-slate-200">일치하는 유튜버가 없습니다. 검색어를 짧게 입력해 보세요.</div>
         ) : (
           filteredChannels.map((channel) => {
             const cKey = String(channel.channel_id || '').trim().toLowerCase();
             const vList = videosMap[cKey] || [];
             const estPrice = Math.round(((channel.subscriber_count || 10000) * 0.05 + (channel.total_view_count || 50000) * 0.001) / 10000) * 10000;
+
+            // 영상이 부족할 경우 예쁜 대체 썸네일 제공
+            const fallbackThumbs = [
+              'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=300',
+              'https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d?w=300',
+              'https://images.unsplash.com/photo-1533750349077-cdcd107d6f2b?w=300',
+              'https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?w=300'
+            ];
 
             return (
               <div 
@@ -178,7 +199,6 @@ export default function YoutubeDashboardPage() {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    {/* ★ 클릭 시 새 페이지 상세 분석 화면으로 이동 */}
                     <button
                       type="button"
                       onClick={() => handleOpenDetail(channel.channel_id)}
@@ -214,14 +234,14 @@ export default function YoutubeDashboardPage() {
                   <div className="grid grid-cols-4 gap-3">
                     {[0, 1, 2, 3].map((i) => {
                       const v = vList[i];
-                      const thumb = v?.thumbnail_url || 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=300';
+                      const thumb = v?.thumbnail_url || fallbackThumbs[i % fallbackThumbs.length];
                       const title = v?.title || `${channel.name} 추천 하이라이트 영상 #${i+1}`;
                       return (
                         <div key={i} className="group relative block rounded-xl border border-slate-100 overflow-hidden bg-slate-100 aspect-video">
                           <img src={thumb} alt="" className="w-full h-full object-cover group-hover:scale-105 transition duration-300" referrerPolicy="no-referrer" />
                           <div className="absolute inset-0 bg-black/80 backdrop-blur-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-center items-center text-center p-3 text-white space-y-1">
                             <p className="text-[11px] font-bold line-clamp-2 px-1">{title}</p>
-                            <span className="text-[10px] text-rose-400 flex items-center gap-1"><Eye size={10} /> {(v?.view_count || 12000).toLocaleString()}회</span>
+                            <span className="text-[10px] text-rose-400 flex items-center gap-1"><Eye size={10} /> {(v?.view_count || 15000).toLocaleString()}회</span>
                           </div>
                         </div>
                       );
