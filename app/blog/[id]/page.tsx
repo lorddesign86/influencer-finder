@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { 
   ArrowLeft, Mail, Heart, MessageSquare, ShieldCheck, 
-  BarChart3, Hash, X, PieChart, Sparkles, TrendingUp, Zap, Calendar, DollarSign, Activity, Layers
+  BarChart3, Hash, X, PieChart, Sparkles, TrendingUp, Zap, Calendar, DollarSign, Activity, Layers, Lock
 } from 'lucide-react';
 
 interface BlogInfluencer {
@@ -17,8 +17,6 @@ interface BlogInfluencer {
   fan_count: number;
   follower_count: number;
   daily_visitors: number;
-  recent_10_avg_likes?: number;
-  recent_10_avg_comments?: number;
   engagement_rate?: number;
   contact_url: string | null;
   tags: string[];
@@ -44,6 +42,10 @@ export default function BlogDetailPage() {
   const [blogger, setBlogger] = useState<BlogInfluencer | null>(null);
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [activeTab, setActiveTab] = useState<'channel' | 'content' | 'pricing'>('channel');
+  
+  // ★ PRO 모드 상태 관리 (테스트를 위해 기본값 false 설정, 상단 버튼으로 토글 가능)
+  const [isProUser, setIsProUser] = useState(false);
+
   const [showKeywordModal, setShowKeywordModal] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -92,7 +94,7 @@ export default function BlogDetailPage() {
   return (
     <div className="flex-1 flex flex-col h-full bg-[#f8f9fa] overflow-y-auto text-slate-800">
       
-      {/* 상단 네비게이션 */}
+      {/* 상단 네비게이션 및 PRO 테스트 토글 버튼 */}
       <div className="bg-white border-b border-slate-200 px-8 py-3 sticky top-0 z-30 flex items-center justify-between shadow-2xs">
         <button 
           onClick={() => router.back()}
@@ -101,13 +103,25 @@ export default function BlogDetailPage() {
           <ArrowLeft size={14} /> 탐색 리스트로
         </button>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          {/* PRO 모드 토글 버튼 (기능 테스트용) */}
+          <button 
+            type="button"
+            onClick={() => setIsProUser(!isProUser)}
+            className={`text-xs font-bold px-4 py-2 rounded-xl transition cursor-pointer shadow-xs ${
+              isProUser ? 'bg-gradient-to-r from-green-600 to-emerald-500 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+            }`}
+          >
+            {isProUser ? '👑 PRO 모드 활성화됨 (클릭시 해제)' : '🔓 무료 회원 (클릭시 PRO 체험)'}
+          </button>
+
           <button 
             onClick={() => setShowKeywordModal(true)}
             className="flex items-center gap-1.5 text-xs font-bold px-4 py-2 bg-emerald-50 text-emerald-700 rounded-xl border border-emerald-200 hover:bg-emerald-100 transition cursor-pointer shadow-2xs"
           >
             <Hash size={14} /> 포스팅 키워드 분석
           </button>
+          
           <a 
             href={`mailto:contact@findlist.co.kr?subject=[광고문의] ${blogger.name || blogger.blog_id} 채널 협업 문의`}
             className="flex items-center gap-1.5 text-xs font-bold px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-500 text-white rounded-xl hover:opacity-95 transition shadow-sm cursor-pointer"
@@ -177,11 +191,12 @@ export default function BlogDetailPage() {
           </button>
           <button 
             onClick={() => setActiveTab('pricing')} 
-            className={`px-5 py-3 rounded-2xl text-xs font-bold transition cursor-pointer flex items-center gap-2 shadow-2xs ${
+            className={`px-5 py-3 rounded-2xl text-xs font-bold transition cursor-pointer flex items-center gap-2 shadow-2xs relative ${
               activeTab === 'pricing' ? 'bg-emerald-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
             }`}
           >
             <DollarSign size={15} /> 광고단가 및 견적서
+            {!isProUser && <Lock size={12} className="text-amber-500 ml-1 inline" />}
           </button>
         </div>
 
@@ -239,7 +254,7 @@ export default function BlogDetailPage() {
           </div>
         )}
 
-        {/* TAB 2: 콘텐츠 피드 */}
+        {/* TAB 2: 콘텐츠 피드 (★ 공감/댓글 수는 PRO 모드에서만 노출) */}
         {activeTab === 'content' && (
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-2xs space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
@@ -271,9 +286,19 @@ export default function BlogDetailPage() {
                       <h4 className="text-xs font-bold text-slate-900 group-hover:text-green-600 transition truncate">{p.title}</h4>
                       <p className="text-[11px] text-slate-500 line-clamp-1">{p.summary}</p>
                     </div>
-                    <div className="flex items-center gap-4 text-xs flex-shrink-0 px-4 bg-white py-3 rounded-xl border border-slate-100">
-                      <span className="text-rose-500 font-bold flex items-center gap-1"><Heart size={14} fill="currentColor" /> {p.like_count || avgLikes}</span>
-                      <span className="text-blue-500 font-bold flex items-center gap-1"><MessageSquare size={14} fill="currentColor" /> {p.comment_count || avgComments}</span>
+
+                    {/* ★ PRO 모드 여부에 따른 공감/댓글 수 노출 제어 */}
+                    <div className="flex items-center gap-4 text-xs flex-shrink-0 px-4 bg-white py-3 rounded-xl border border-slate-100 relative">
+                      {isProUser ? (
+                        <>
+                          <span className="text-rose-500 font-bold flex items-center gap-1"><Heart size={14} fill="currentColor" /> {p.like_count || avgLikes}</span>
+                          <span className="text-blue-500 font-bold flex items-center gap-1"><MessageSquare size={14} fill="currentColor" /> {p.comment_count || avgComments}</span>
+                        </>
+                      ) : (
+                        <div className="flex items-center gap-2 text-amber-700 font-bold text-[11px] bg-amber-50 px-3 py-1 rounded-lg border border-amber-200">
+                          <Lock size={13} /> PRO 전용 지표
+                        </div>
+                      )}
                     </div>
                   </a>
                 ))
@@ -284,68 +309,92 @@ export default function BlogDetailPage() {
           </div>
         )}
 
-        {/* TAB 3: 광고단가 및 견적서 */}
+        {/* TAB 3: 광고단가 및 견적서 (★ PRO 회원 전용 제한 기능 적용) */}
         {activeTab === 'pricing' && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-3 gap-4">
-              <div className="bg-white p-6 rounded-3xl border-2 border-emerald-100 shadow-2xs space-y-2">
-                <span className="text-xs font-bold text-emerald-600 uppercase">포스팅 예상 원고료</span>
-                <p className="text-3xl font-black text-slate-900">{estPrice.toLocaleString()}원</p>
-                <p className="text-[11px] text-slate-400">일방문자 및 팬덤 규모 기반 산정</p>
-              </div>
-              <div className="bg-white p-6 rounded-3xl border-2 border-blue-100 shadow-2xs space-y-2">
-                <span className="text-xs font-bold text-blue-600 uppercase">협업 매칭 스코어</span>
-                <p className="text-3xl font-black text-slate-900">{score}점</p>
-                <p className="text-[11px] text-slate-400">광고 성과 달성 확률 매우 높음</p>
-              </div>
-              <div className="bg-white p-6 rounded-3xl border-2 border-purple-100 shadow-2xs space-y-2">
-                <span className="text-xs font-bold text-purple-600 uppercase">독자 참여율 (ER)</span>
-                <p className="text-3xl font-black text-purple-600">{engRate}%</p>
-                <p className="text-[11px] text-slate-400">실제 구매 전환 유도 최적화</p>
-              </div>
-            </div>
+          <div>
+            {isProUser ? (
+              <div className="space-y-6 animate-in fade-in duration-200">
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="bg-white p-6 rounded-3xl border-2 border-emerald-100 shadow-2xs space-y-2">
+                    <span className="text-xs font-bold text-emerald-600 uppercase">포스팅 예상 원고료</span>
+                    <p className="text-3xl font-black text-slate-900">{estPrice.toLocaleString()}원</p>
+                    <p className="text-[11px] text-slate-400">네이버 블로그 시장 평균 단가 기준</p>
+                  </div>
+                  <div className="bg-white p-6 rounded-3xl border-2 border-blue-100 shadow-2xs space-y-2">
+                    <span className="text-xs font-bold text-blue-600 uppercase">협업 매칭 스코어</span>
+                    <p className="text-3xl font-black text-slate-900">{score}점</p>
+                    <p className="text-[11px] text-slate-400">광고 성과 달성 확률 매우 높음</p>
+                  </div>
+                  <div className="bg-white p-6 rounded-3xl border-2 border-purple-100 shadow-2xs space-y-2">
+                    <span className="text-xs font-bold text-purple-600 uppercase">독자 참여율 (ER)</span>
+                    <p className="text-3xl font-black text-purple-600">{engRate}%</p>
+                    <p className="text-[11px] text-slate-400">실제 구매 전환 유도 최적화</p>
+                  </div>
+                </div>
 
-            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-2xs space-y-4">
-              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                <PieChart className="text-emerald-600" size={18} /> 네이버 블로그 캠페인 유형별 공식 견적 및 보장 혜택
-              </h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs text-left">
-                  <thead className="bg-slate-50 text-slate-500 font-semibold border-y border-slate-100">
-                    <tr>
-                      <th className="py-3 px-4">캠페인 유형</th>
-                      <th className="py-3 px-4">콘텐츠 제작 형태</th>
-                      <th className="py-3 px-4">예상 광고 단가</th>
-                      <th className="py-3 px-4">보장 혜택</th>
-                      <th className="py-3 px-4 text-right">광고 효율</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 font-medium">
-                    <tr>
-                      <td className="py-4 px-4 font-bold text-slate-900">제품 리뷰 체험단</td>
-                      <td className="py-4 px-4 text-slate-600">실사용 리뷰 + 상세 사진 15장 이상</td>
-                      <td className="py-4 px-4 font-bold text-emerald-600">{estPrice.toLocaleString()}원</td>
-                      <td className="py-4 px-4 text-slate-600">스마트블록 키워드 노출 도전</td>
-                      <td className="py-4 px-4 text-right font-bold text-emerald-600">최고 (★★★★★)</td>
-                    </tr>
-                    <tr>
-                      <td className="py-4 px-4 font-bold text-slate-900">기자단 포스팅</td>
-                      <td className="py-4 px-4 text-slate-600">가이드라인 기반 정보형 포스팅</td>
-                      <td className="py-4 px-4 font-bold text-blue-600">{Math.round(estPrice * 0.7).toLocaleString()}원</td>
-                      <td className="py-4 px-4 text-slate-600">대량 키워드 확산 용이</td>
-                      <td className="py-4 px-4 text-right font-bold text-blue-600">우수 (★★★★☆)</td>
-                    </tr>
-                    <tr>
-                      <td className="py-4 px-4 font-bold text-slate-900">공동구매 / 링크 배포</td>
-                      <td className="py-4 px-4 text-slate-600">구매 링크 유도형 소구 콘텐츠</td>
-                      <td className="py-4 px-4 font-bold text-purple-600">{Math.round(estPrice * 1.3).toLocaleString()}원 + 수수료</td>
-                      <td className="py-4 px-4 text-slate-600">실제 매출 전환 극대화</td>
-                      <td className="py-4 px-4 text-right font-bold text-purple-600">최고 (★★★★★)</td>
-                    </tr>
-                  </tbody>
-                </table>
+                <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-2xs space-y-4">
+                  <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                    <PieChart className="text-emerald-600" size={18} /> 네이버 블로그 캠페인 유형별 공식 견적 및 보장 혜택
+                  </h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-left">
+                      <thead className="bg-slate-50 text-slate-500 font-semibold border-y border-slate-100">
+                        <tr>
+                          <th className="py-3 px-4">캠페인 유형</th>
+                          <th className="py-3 px-4">콘텐츠 제작 형태</th>
+                          <th className="py-3 px-4">예상 광고 단가</th>
+                          <th className="py-3 px-4">보장 혜택</th>
+                          <th className="py-3 px-4 text-right">광고 효율</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 font-medium">
+                        <tr>
+                          <td className="py-4 px-4 font-bold text-slate-900">제품 리뷰 체험단</td>
+                          <td className="py-4 px-4 text-slate-600">실사용 리뷰 + 상세 사진 15장 이상</td>
+                          <td className="py-4 px-4 font-bold text-emerald-600">{estPrice.toLocaleString()}원</td>
+                          <td className="py-4 px-4 text-slate-600">스마트블록 키워드 노출 도전</td>
+                          <td className="py-4 px-4 text-right font-bold text-emerald-600">최고 (★★★★★)</td>
+                        </tr>
+                        <tr>
+                          <td className="py-4 px-4 font-bold text-slate-900">기자단 포스팅</td>
+                          <td className="py-4 px-4 text-slate-600">가이드라인 기반 정보형 포스팅</td>
+                          <td className="py-4 px-4 font-bold text-blue-600">{Math.round(estPrice * 0.7).toLocaleString()}원</td>
+                          <td className="py-4 px-4 text-slate-600">대량 키워드 확산 용이</td>
+                          <td className="py-4 px-4 text-right font-bold text-blue-600">우수 (★★★★☆)</td>
+                        </tr>
+                        <tr>
+                          <td className="py-4 px-4 font-bold text-slate-900">공동구매 / 링크 배포</td>
+                          <td className="py-4 px-4 text-slate-600">구매 링크 유도형 소구 콘텐츠</td>
+                          <td className="py-4 px-4 font-bold text-purple-600">{Math.round(estPrice * 1.3).toLocaleString()}원 + 수수료</td>
+                          <td className="py-4 px-4 text-slate-600">실제 매출 전환 극대화</td>
+                          <td className="py-4 px-4 text-right font-bold text-purple-600">최고 (★★★★★)</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
-            </div>
+            ) : (
+              // 무료 회원일 때 노출되는 PRO 업그레이드 유도 페이월
+              <div className="bg-white rounded-3xl border border-slate-200 p-16 text-center space-y-6 shadow-xs">
+                <div className="w-16 h-16 bg-amber-50 text-amber-600 rounded-2xl mx-auto flex items-center justify-center text-2xl font-bold shadow-inner">
+                  <Lock size={28} />
+                </div>
+                <div className="space-y-2 max-w-md mx-auto">
+                  <h3 className="text-lg font-black text-slate-900">광고단가 및 상세 견적서는 PRO 회원 전용 기능입니다</h3>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    크리에이터별 정확한 예상 원고료, 캠페인 유형별 공식 단가표, 스마트블록 노출 보장 혜택 등 마케팅 핵심 데이터를 무제한으로 열람하세요.
+                  </p>
+                </div>
+                <button 
+                  type="button"
+                  onClick={() => setIsProUser(true)}
+                  className="px-8 py-3.5 bg-gradient-to-r from-green-600 to-emerald-500 text-white text-xs font-bold rounded-2xl shadow-md hover:opacity-95 transition cursor-pointer"
+                >
+                  👑 PRO 플랜 업그레이드하고 전체 열람하기
+                </button>
+              </div>
+            )}
           </div>
         )}
 
