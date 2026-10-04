@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { 
   ArrowLeft, Mail, Heart, MessageSquare, ShieldCheck, 
-  BarChart3, Hash, X, PieChart, Sparkles, TrendingUp, Zap, Calendar, DollarSign, Activity, Layers, Lock
+  Hash, X, PieChart, TrendingUp, Zap, Calendar, DollarSign, Activity, Layers, Lock
 } from 'lucide-react';
 
 interface BlogInfluencer {
@@ -17,6 +17,8 @@ interface BlogInfluencer {
   fan_count: number;
   follower_count: number;
   daily_visitors: number;
+  recent_10_avg_likes?: number;
+  recent_10_avg_comments?: number;
   engagement_rate?: number;
   contact_url: string | null;
   tags: string[];
@@ -86,13 +88,15 @@ export default function BlogDetailPage() {
   const avgLikes = blogger.recent_10_avg_likes ?? 48;
   const avgComments = blogger.recent_10_avg_comments ?? 14;
   const engRate = blogger.engagement_rate ?? 4.8;
-  const estPrice = Math.round(((blogger.daily_visitors || 1200) * 25 + (blogger.fan_count || 1000) * 20) / 10000) * 10000;
+
+  // ★ 현실적인 네이버 블로그 인플루언서 단가 산정 공식 적용 (최대 45만 원 상한)
+  const rawCalculatedPrice = 50000 + ((blogger.daily_visitors || 500) * 12) + ((blogger.fan_count || 300) * 3);
+  const estPrice = Math.min(450000, Math.max(50000, Math.round(rawCalculatedPrice / 10000) * 10000));
+
   const score = Math.min(99, Math.max(68, Math.round(72 + engRate * 3)));
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[#f8f9fa] overflow-y-auto text-slate-800">
-      
-      {/* 상단 네비게이션 */}
       <div className="bg-white border-b border-slate-200 px-8 py-3 sticky top-0 z-30 flex items-center justify-between shadow-2xs">
         <button 
           onClick={() => router.back()}
@@ -129,8 +133,6 @@ export default function BlogDetailPage() {
       </div>
 
       <div className="max-w-6xl mx-auto w-full p-8 space-y-6">
-        
-        {/* 프로필 요약 카드 */}
         <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div className="flex items-center gap-4">
             <img 
@@ -168,7 +170,6 @@ export default function BlogDetailPage() {
           </div>
         </div>
 
-        {/* 탭 네비게이션 */}
         <div className="flex gap-2 border-b border-slate-200 pb-2">
           <button 
             onClick={() => setActiveTab('channel')} 
@@ -197,7 +198,6 @@ export default function BlogDetailPage() {
           </button>
         </div>
 
-        {/* TAB 1: 채널 분석 */}
         {activeTab === 'channel' && (
           <div className="space-y-6">
             <div className="grid grid-cols-4 gap-4">
@@ -251,7 +251,6 @@ export default function BlogDetailPage() {
           </div>
         )}
 
-        {/* TAB 2: 콘텐츠 피드 (★ 무료 회원일 때 공감/댓글 숫자를 블러 처리하여 호기심 유발) */}
         {activeTab === 'content' && (
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-2xs space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
@@ -284,7 +283,6 @@ export default function BlogDetailPage() {
                       <p className="text-[11px] text-slate-500 line-clamp-1">{p.summary}</p>
                     </div>
 
-                    {/* ★ PRO 모드일 때는 실제 숫자, 무료 회원일 때는 숫자를 블러 처리하고 자물쇠 배치를 통해 호기심 유발 */}
                     <div className="flex items-center gap-4 text-xs flex-shrink-0 px-4 bg-white py-3 rounded-xl border border-slate-100 relative">
                       {isProUser ? (
                         <>
@@ -314,7 +312,6 @@ export default function BlogDetailPage() {
           </div>
         )}
 
-        {/* TAB 3: 광고단가 및 견적서 */}
         {activeTab === 'pricing' && (
           <div>
             {isProUser ? (
@@ -404,7 +401,6 @@ export default function BlogDetailPage() {
 
       </div>
 
-      {/* 키워드 분석 모달 */}
       {showKeywordModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
           <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl p-6 space-y-5">
