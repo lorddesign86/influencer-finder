@@ -82,6 +82,11 @@ export default function YoutubeDashboardPage() {
     });
   }, [channels, search, selectedTag]);
 
+  // ★ 새로운 상세 페이지로 이동하는 핸들러 함수
+  const handleOpenDetail = (channelId: string) => {
+    router.push(`/youtube/${channelId}`);
+  };
+
   return (
     <div className="flex-1 flex flex-col h-full bg-[#f8f9fa] overflow-y-auto">
       {/* 상단 검색 및 카테고리 헤더 */}
@@ -173,9 +178,10 @@ export default function YoutubeDashboardPage() {
                   </div>
 
                   <div className="flex items-center gap-2">
+                    {/* ★ 클릭 시 새 페이지 상세 분석 화면으로 이동 */}
                     <button
                       type="button"
-                      onClick={() => router.push(`/youtube/${channel.channel_id}`)}
+                      onClick={() => handleOpenDetail(channel.channel_id)}
                       className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition shadow-xs cursor-pointer"
                     >
                       채널 상세 분석 <ChevronRight size={14} />
