@@ -67,7 +67,6 @@ export default function BlogDashboardPage() {
     fetchBloggers();
   }, []);
 
-  // ★ 유연하고 강력한 검색 시스템
   const filteredBloggers = useMemo(() => {
     return bloggers
       .filter((item) => {
@@ -98,8 +97,12 @@ export default function BlogDashboardPage() {
         return matched;
       })
       .sort((a, b) => {
-        const aPrice = Math.round(((a.daily_visitors || 0) * 25 + (a.fan_count || 0) * 20));
-        const bPrice = Math.round(((b.daily_visitors || 0) * 25 + (b.fan_count || 0) * 20));
+        const calcP = (item: BlogInfluencer) => {
+          const raw = 50000 + ((item.daily_visitors || 500) * 12) + ((item.fan_count || 300) * 3);
+          return Math.min(450000, Math.max(50000, raw));
+        };
+        const aPrice = calcP(a);
+        const bPrice = calcP(b);
 
         if (blogSort === 'fan_desc') return (b.fan_count || 0) - (a.fan_count || 0);
         if (blogSort === 'visitors_desc') return (b.daily_visitors || 0) - (a.daily_visitors || 0);
@@ -124,7 +127,6 @@ export default function BlogDashboardPage() {
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[#f8f9fa] overflow-y-auto">
-      {/* 상단 검색 및 카테고리 헤더 */}
       <div className="bg-white border-b border-slate-200 px-8 py-6 sticky top-0 z-20 space-y-4 shadow-2xs">
         <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
           <div className="relative flex-1">
@@ -167,9 +169,7 @@ export default function BlogDashboardPage() {
         </div>
       </div>
 
-      {/* 본문 채널 리스트 피드 */}
       <div className="max-w-5xl mx-auto w-full p-8 space-y-4">
-        
         <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-2 overflow-x-auto">
             <span className="text-xs font-bold text-slate-500 mr-2 flex items-center gap-1">
@@ -239,7 +239,6 @@ export default function BlogDashboardPage() {
         )}
       </div>
 
-      {/* 무료 조회 한도 초과 팝업 */}
       {showLimitModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
           <div className="bg-white w-full max-w-md rounded-3xl p-8 text-center space-y-5 shadow-2xl border border-slate-100 animate-in fade-in zoom-in duration-200">
@@ -273,7 +272,6 @@ export default function BlogDashboardPage() {
   );
 }
 
-// ★ 채널 상세 페이지와 100% 동일한 방식으로 Supabase에서 포스트를 직접 안전하게 쿼리하는 카드 컴포넌트
 function BloggerCard({ blogger, handleOpenDetail }: { blogger: BlogInfluencer; handleOpenDetail: (id: string) => void }) {
   const [posts, setPosts] = useState<BlogPost[]>([]);
 
@@ -281,7 +279,6 @@ function BloggerCard({ blogger, handleOpenDetail }: { blogger: BlogInfluencer; h
     const fetchPostsDirectly = async () => {
       if (!blogger.blog_id) return;
       
-      // 1차: blog_id로 직접 쿼리 (상세 페이지 방식)
       let { data } = await supabase
         .from('blog_posts')
         .select('*')
@@ -289,7 +286,6 @@ function BloggerCard({ blogger, handleOpenDetail }: { blogger: BlogInfluencer; h
         .order('published_at', { ascending: false })
         .limit(4);
 
-      // 2차: 데이터가 없으면 handle로 쿼리
       if ((!data || data.length === 0) && blogger.handle) {
         const { data: hData } = await supabase
           .from('blog_posts')
@@ -307,9 +303,9 @@ function BloggerCard({ blogger, handleOpenDetail }: { blogger: BlogInfluencer; h
     fetchPostsDirectly();
   }, [blogger]);
 
-  const estPrice = Math.round(((blogger.daily_visitors || 0) * 25 + (blogger.fan_count || 0) * 20) / 10000) * 10000;
+  const rawPrice = 50000 + ((blogger.daily_visitors || 500) * 12) + ((blogger.fan_count || 300) * 3);
+  const estPrice = Math.min(450000, Math.max(50000, Math.round(rawPrice / 10000) * 10000));
 
-  // 만약 실제 DB 포스트가 부족할 경우를 대비한 안전한 대체 콘텐츠
   const fallbackImages = [
     'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=300',
     'https://images.unsplash.com/photo-1512496015851-a90fb38ba796?w=300',
@@ -396,7 +392,6 @@ function BloggerCard({ blogger, handleOpenDetail }: { blogger: BlogInfluencer; h
         </div>
       </div>
 
-      {/* 최근 발행 콘텐츠 4개 및 마우스 오버 효과 */}
       <div className="space-y-2">
         <p className="text-[11px] font-bold text-slate-400">최근 발행 콘텐츠</p>
         <div className="grid grid-cols-4 gap-3">
