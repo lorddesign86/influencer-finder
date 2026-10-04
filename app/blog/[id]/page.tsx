@@ -43,9 +43,7 @@ export default function BlogDetailPage() {
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [activeTab, setActiveTab] = useState<'channel' | 'content' | 'pricing'>('channel');
   
-  // ★ PRO 모드 상태 관리 (테스트를 위해 기본값 false 설정, 상단 버튼으로 토글 가능)
   const [isProUser, setIsProUser] = useState(false);
-
   const [showKeywordModal, setShowKeywordModal] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -94,7 +92,7 @@ export default function BlogDetailPage() {
   return (
     <div className="flex-1 flex flex-col h-full bg-[#f8f9fa] overflow-y-auto text-slate-800">
       
-      {/* 상단 네비게이션 및 PRO 테스트 토글 버튼 */}
+      {/* 상단 네비게이션 */}
       <div className="bg-white border-b border-slate-200 px-8 py-3 sticky top-0 z-30 flex items-center justify-between shadow-2xs">
         <button 
           onClick={() => router.back()}
@@ -104,7 +102,6 @@ export default function BlogDetailPage() {
         </button>
 
         <div className="flex items-center gap-3">
-          {/* PRO 모드 토글 버튼 (기능 테스트용) */}
           <button 
             type="button"
             onClick={() => setIsProUser(!isProUser)}
@@ -171,7 +168,7 @@ export default function BlogDetailPage() {
           </div>
         </div>
 
-        {/* 탭 네비게이션: 채널 / 콘텐츠 / 광고단가 */}
+        {/* 탭 네비게이션 */}
         <div className="flex gap-2 border-b border-slate-200 pb-2">
           <button 
             onClick={() => setActiveTab('channel')} 
@@ -254,7 +251,7 @@ export default function BlogDetailPage() {
           </div>
         )}
 
-        {/* TAB 2: 콘텐츠 피드 (★ 공감/댓글 수는 PRO 모드에서만 노출) */}
+        {/* TAB 2: 콘텐츠 피드 (★ 무료 회원일 때 공감/댓글 숫자를 블러 처리하여 호기심 유발) */}
         {activeTab === 'content' && (
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-2xs space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
@@ -287,7 +284,7 @@ export default function BlogDetailPage() {
                       <p className="text-[11px] text-slate-500 line-clamp-1">{p.summary}</p>
                     </div>
 
-                    {/* ★ PRO 모드 여부에 따른 공감/댓글 수 노출 제어 */}
+                    {/* ★ PRO 모드일 때는 실제 숫자, 무료 회원일 때는 숫자를 블러 처리하고 자물쇠 배치를 통해 호기심 유발 */}
                     <div className="flex items-center gap-4 text-xs flex-shrink-0 px-4 bg-white py-3 rounded-xl border border-slate-100 relative">
                       {isProUser ? (
                         <>
@@ -295,8 +292,16 @@ export default function BlogDetailPage() {
                           <span className="text-blue-500 font-bold flex items-center gap-1"><MessageSquare size={14} fill="currentColor" /> {p.comment_count || avgComments}</span>
                         </>
                       ) : (
-                        <div className="flex items-center gap-2 text-amber-700 font-bold text-[11px] bg-amber-50 px-3 py-1 rounded-lg border border-amber-200">
-                          <Lock size={13} /> PRO 전용 지표
+                        <div className="flex items-center gap-3">
+                          <span className="text-rose-400 font-bold flex items-center gap-1 filter blur-[4px] select-none opacity-60">
+                            <Heart size={14} fill="currentColor" /> 2115
+                          </span>
+                          <span className="text-blue-400 font-bold flex items-center gap-1 filter blur-[4px] select-none opacity-60">
+                            <MessageSquare size={14} fill="currentColor" /> 466
+                          </span>
+                          <span className="absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-[0.5px] rounded-xl text-amber-800 font-bold text-[11px] gap-1 shadow-2xs">
+                            <Lock size={12} /> PRO 지표
+                          </span>
                         </div>
                       )}
                     </div>
@@ -309,7 +314,7 @@ export default function BlogDetailPage() {
           </div>
         )}
 
-        {/* TAB 3: 광고단가 및 견적서 (★ PRO 회원 전용 제한 기능 적용) */}
+        {/* TAB 3: 광고단가 및 견적서 */}
         {activeTab === 'pricing' && (
           <div>
             {isProUser ? (
@@ -375,7 +380,6 @@ export default function BlogDetailPage() {
                 </div>
               </div>
             ) : (
-              // 무료 회원일 때 노출되는 PRO 업그레이드 유도 페이월
               <div className="bg-white rounded-3xl border border-slate-200 p-16 text-center space-y-6 shadow-xs">
                 <div className="w-16 h-16 bg-amber-50 text-amber-600 rounded-2xl mx-auto flex items-center justify-center text-2xl font-bold shadow-inner">
                   <Lock size={28} />
