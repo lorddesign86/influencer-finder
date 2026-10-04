@@ -61,18 +61,15 @@ export default function BlogDashboardPage() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const { data: bData, error: bErr } = await supabase.from('blog_influencers').select('*').limit(100);
-        const { data: pData, error: pErr } = await supabase.from('blog_posts').select('*').limit(1000);
-
-        if (bErr) console.error('Influencers fetch error:', bErr);
-        if (pErr) console.error('Posts fetch error:', pErr);
+        const { data: bData } = await supabase.from('blog_influencers').select('*').limit(100);
+        const { data: pData } = await supabase.from('blog_posts').select('*').limit(1500);
 
         if (bData) setBloggers(bData as BlogInfluencer[]);
         
         if (pData) {
           const map: Record<string, BlogPost[]> = {};
           pData.forEach((p: BlogPost) => {
-            const key = String(p.blog_id || '').trim().toLowerCase();
+            const key = String(p.blog_id || '').trim();
             if (!map[key]) map[key] = [];
             map[key].push(p);
           });
@@ -230,41 +227,9 @@ export default function BlogDashboardPage() {
           <div className="p-20 text-center text-sm text-slate-400 bg-white rounded-2xl border border-slate-200">일치하는 블로거가 없습니다.</div>
         ) : (
           filteredBloggers.map((blogger) => {
-            // 대소문자 및 공백 차이를 무시하고 안전하게 매칭하도록 수정
-            const bKey = String(blogger.blog_id || '').trim().toLowerCase();
-            const hKey = String(blogger.handle || '').trim().toLowerCase();
-            const bPosts = blogPostsMap[bKey] || blogPostsMap[hKey] || [];
-            
+            // 상세 페이지와 정확히 동일한 키값 조회 방식으로 수정
+            const bPosts = blogPostsMap[blogger.blog_id] || blogPostsMap[blogger.handle] || [];
             const estPrice = Math.round(((blogger.daily_visitors || 0) * 25 + (blogger.fan_count || 0) * 20) / 10000) * 10000;
-
-            // 만약 실제 DB 포스트가 부족할 경우를 대비해 고유 인덱스 기반 대체 콘텐츠 생성
-            const displayPosts = [0, 1, 2, 3].map((i) => {
-              const target = bPosts[i];
-              if (target && target.thumbnail_url && target.thumbnail_url.startsWith('http')) {
-                return target;
-              }
-              const uniqueIdNum = (blogger.blog_id.charCodeAt(0) + i * 19) % 10;
-              const fallbackImages = [
-                'https://images.unsplash.com/photo-1499750310107-5fef28a66643?w=300',
-                'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=300',
-                'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=300',
-                'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=300',
-                'https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?w=300',
-                'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=300',
-                'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=300',
-                'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=300',
-                'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=300',
-                'https://images.unsplash.com/photo-1447752875215-b2761acb3c5d?w=300'
-              ];
-              return {
-                title: target?.title || `${blogger.name || '블로거'}의 최근 포스팅 #${i+1}`,
-                post_url: target?.post_url || '#',
-                thumbnail_url: target?.thumbnail_url || fallbackImages[uniqueIdNum],
-                published_at: target?.published_at || '2026.10.01',
-                like_count: target?.like_count || (30 + i * 12),
-                comment_count: target?.comment_count || (5 + i * 3)
-              };
-            });
 
             return (
               <div 
@@ -331,37 +296,43 @@ export default function BlogDashboardPage() {
                   </div>
                 </div>
 
-                {/* 최근 발행 콘텐츠 4개 및 마우스 오버 효과 */}
+                {/* 상세 페이지와 동일하게 실제 DB의 최신 포스트 4개를 직접 연동 */}
                 <div className="space-y-2">
                   <p className="text-[11px] font-bold text-slate-400">최근 발행 콘텐츠</p>
                   <div className="grid grid-cols-4 gap-3">
-                    {displayPosts.map((p, idx) => (
-                      <a 
-                        key={idx}
-                        href={p.post_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="group relative block rounded-xl border border-slate-100 overflow-hidden bg-slate-100 hover:shadow-md transition aspect-video"
-                      >
-                        <img 
-                          src={p.thumbnail_url} 
-                          alt={p.title} 
-                          referrerPolicy="no-referrer"
-                          className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                        />
+                    {bPosts.length > 0 ? (
+                      bPosts.slice(0, 4).map((p, idx) => (
+                        <a 
+                          key={idx}
+                          href={p.post_url || '#'}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="group relative block rounded-xl border border-slate-100 overflow-hidden bg-slate-100 hover:shadow-md transition aspect-video"
+                        >
+                          <img 
+                            src={p.thumbnail_url || 'https://images.unsplash.com/photo-1499750310107-5fef28a66643?w=300'} 
+                            alt={p.title} 
+                            referrerPolicy="no-referrer"
+                            className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                          />
 
-                        <div className="absolute inset-0 bg-black/80 backdrop-blur-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-center items-center text-center p-3 text-white space-y-1.5">
-                          <p className="text-[11px] font-bold line-clamp-2 px-1">{p.title}</p>
-                          <div className="flex items-center gap-2 text-[10px] text-slate-300 pt-1">
-                            <span className="flex items-center gap-0.5"><Calendar size={10} /> {p.published_at}</span>
+                          <div className="absolute inset-0 bg-black/80 backdrop-blur-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-center items-center text-center p-3 text-white space-y-1.5">
+                            <p className="text-[11px] font-bold line-clamp-2 px-1">{p.title}</p>
+                            <div className="flex items-center gap-2 text-[10px] text-slate-300 pt-1">
+                              <span className="flex items-center gap-0.5"><Calendar size={10} /> {p.published_at || '2026.10.01'}</span>
+                            </div>
+                            <div className="flex items-center gap-3 text-[11px] font-semibold pt-1">
+                              <span className="text-rose-400 flex items-center gap-1"><Heart size={12} fill="currentColor" /> {p.like_count || 0}</span>
+                              <span className="text-blue-400 flex items-center gap-1"><MessageSquare size={12} fill="currentColor" /> {p.comment_count || 0}</span>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-3 text-[11px] font-semibold pt-1">
-                            <span className="text-rose-400 flex items-center gap-1"><Heart size={12} fill="currentColor" /> {p.like_count}</span>
-                            <span className="text-blue-400 flex items-center gap-1"><MessageSquare size={12} fill="currentColor" /> {p.comment_count}</span>
-                          </div>
-                        </div>
-                      </a>
-                    ))}
+                        </a>
+                      ))
+                    ) : (
+                      <div className="col-span-4 p-4 text-center text-xs text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                        등록된 최근 콘텐츠가 없습니다.
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
