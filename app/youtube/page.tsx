@@ -4,30 +4,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { 
-  Search, Tag, ChevronRight, Eye, Lock, Sparkles, Mail, PlaySquare 
+  Search, Tag, ChevronRight, Eye, Lock, Sparkles, Mail 
 } from 'lucide-react';
-
-interface Influencer {
-  id: number;
-  platform: string;
-  channel_id: string;
-  name: string;
-  handle: string;
-  profile_img_url: string;
-  subscriber_count: number;
-  total_view_count: number;
-  video_count: number;
-  tags: string[];
-}
-
-interface InfluencerPost {
-  id: number;
-  channel_id: string;
-  title: string;
-  thumbnail_url: string;
-  view_count: number;
-  published_at: string;
-}
 
 const YOUTUBE_CATEGORIES = [
   '전체', '맛집', '먹방', '여행', 'Vlog', 'IT', '뷰티', '패션', '게임', '경제'
@@ -39,31 +17,36 @@ export default function YoutubeDashboardPage() {
   const [search, setSearch] = useState('');
   const [selectedTag, setSelectedTag] = useState('전체');
   
-  const [channels, setChannels] = useState<Influencer[]>([]);
-  const [postsMap, setPostsMap] = useState<Record<string, InfluencerPost[]>>({});
+  const [channels, setChannels] = useState<any[]>([]);
+  const [postsMap, setPostsMap] = useState<Record<string, any[]>>({});
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const fetchYoutubeData = async () => {
       setLoading(true);
       try {
-        const { data: cData } = await supabase
+        // influencers 테이블에서 platform이 youtube인 데이터 조회
+        const { data: cData, error: cErr } = await supabase
           .from('influencers')
           .select('*')
           .eq('platform', 'youtube')
           .limit(300);
 
-        const { data: pData } = await supabase
+        const { data: pData, error: pErr } = await supabase
           .from('influencer_posts')
           .select('*')
           .limit(1500);
 
-        if (cData) setChannels(cData as Influencer[]);
+        if (cErr) console.error('influencers fetch error:', cErr);
+        if (pErr) console.error('influencer_posts fetch error:', pErr);
+
+        if (cData) setChannels(cData);
         
         if (pData) {
-          const map: Record<string, InfluencerPost[]> = {};
-          pData.forEach((p: InfluencerPost) => {
-            const key = String(p.channel_id || '').trim().toLowerCase();
+          const map: Record<string, any[]> = {};
+          pData.forEach((p: any) => {
+            // channel_id 또는 influencer_id 매칭을 유연하게 처리
+            const key = String(p.channel_id || p.influencer_id || '').trim().toLowerCase();
             if (!map[key]) map[key] = [];
             map[key].push(p);
           });
@@ -80,13 +63,17 @@ export default function YoutubeDashboardPage() {
     const q = search.trim().toLowerCase();
     
     if (!q && selectedTag === '전체') {
-      const over500k = channels.filter(c => (Number(c.subscriber_count) || 0) >= 500000);
-      const targetPool = over500k.length > 0 ? over500k : channels;
-      return { list: targetPool.slice(0, 5), isDefaultRecommend: true };
+      // 구독자 데이터 컬럼명 유연성 확보 (subscriber_count 또는 subscribers 등 대응)
+      const sorted = [...channels].sort((a, b) => {
+        const subA = Number(a.subscriber_count || a.subscribers || a.fan_count || 0);
+        const subB = Number(b.subscriber_count || b.subscribers || b.fan_count || 0);
+        return subB - subA;
+      });
+      return { list: sorted.slice(0, 5), isDefaultRecommend: true };
     }
 
     const filtered = channels.filter((item) => {
-      const tags = Array.isArray(item.tags) ? item.tags.map(t => (t || '').toLowerCase()) : [];
+      const tags = Array.isArray(item.tags) ? item.tags.map((t: string) => t.toLowerCase()) : [];
       const matchesCat = selectedTag === '전체' || 
         tags.some(t => t.includes(selectedTag.toLowerCase())) || 
         (item.name || '').toLowerCase().includes(selectedTag.toLowerCase());
@@ -164,7 +151,7 @@ export default function YoutubeDashboardPage() {
           <div className="bg-gradient-to-r from-red-50 to-rose-50 border border-red-200 p-4 rounded-2xl flex items-center justify-between text-xs text-red-900 shadow-2xs">
             <div className="flex items-center gap-2 font-bold">
               <Sparkles size={16} className="text-red-600" />
-              <span>실시간 추천 50만+ 구독자 대형 유튜버 파워 채널 베스트 5</span>
+              <span>실시간 추천 대형 유튜버 파워 채널 베스트 5</span>
             </div>
             <span className="text-[11px] text-red-600 font-semibold">검색창에서 원하는 크리에이터를 검색해 보세요!</span>
           </div>
@@ -180,15 +167,16 @@ export default function YoutubeDashboardPage() {
           <div className="p-20 text-center text-sm text-slate-400 bg-white rounded-2xl border border-slate-200">일치하는 유튜버가 없습니다. 검색어를 짧게 입력해 보세요.</div>
         ) : (
           displayedChannels.list.map((channel) => {
-            const cKey = String(channel.channel_id || '').trim().toLowerCase();
-            const pList = postsMap[cKey] || [];
+            const cKey = String(channel.channel_id || channel.id || '').trim().toLowerCase();
+            const pList = postsMap[cKey] || postsMap[String(channel.id)] || [];
             
-            const subs = Number(channel.subscriber_count) || 50000;
-            const totalViews = Number(channel.total_view_count) || 200000;
-            const vCount = Number(channel.video_count) || 100;
+            // DB 컬럼명 대소문자 및 변형 대응
+            const subs = Number(channel.subscriber_count ?? channel.subscribers ?? channel.fan_count ?? 0);
+            const totalViews = Number(channel.total_view_count ?? channel.view_count ?? 0);
+            const vCount = Number(channel.video_count ?? channel.videos_count ?? 50);
 
-            const longFormAvgViews = Math.round(totalViews / Math.max(1, vCount));
-            const shortFormAvgViews = Math.round(longFormAvgViews * 1.8); // 숏폼 평균 조회수 추정치
+            const longFormAvgViews = vCount > 0 ? Math.round(totalViews / vCount) : Math.round(totalViews / 50);
+            const shortFormAvgViews = Math.round(longFormAvgViews * 1.5);
             const estPrice = Math.round((subs * 0.05 + longFormAvgViews * 0.002) / 10000) * 10000;
 
             const fallbackThumbs = [
@@ -206,7 +194,7 @@ export default function YoutubeDashboardPage() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3.5">
                     <img 
-                      src={channel.profile_img_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'} 
+                      src={channel.profile_img_url || channel.profile_image || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'} 
                       alt={channel.name} 
                       referrerPolicy="no-referrer"
                       className="w-14 h-14 rounded-full border border-slate-200 object-cover"
@@ -218,7 +206,7 @@ export default function YoutubeDashboardPage() {
                       </div>
                       <p className="text-xs text-slate-400 mt-0.5">@{channel.handle || channel.channel_id}</p>
                       <div className="flex gap-1.5 mt-2">
-                        {(Array.isArray(channel.tags) ? channel.tags : ['크리에이터']).map((t, idx) => (
+                        {(Array.isArray(channel.tags) ? channel.tags : ['크리에이터']).map((t: string, idx: number) => (
                           <span key={idx} className="text-[10px] font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-100">
                             #{t}
                           </span>
@@ -227,7 +215,7 @@ export default function YoutubeDashboardPage() {
                     </div>
                   </div>
 
-                  {/* ★ 상세 분석 및 광고 문의 버튼 나란히 배치 */}
+                  {/* 광고 문의 및 채널 상세 분석 버튼 */}
                   <div className="flex items-center gap-2">
                     <a
                       href={`mailto:contact@findlist.co.kr?subject=[유튜브 협업문의] ${channel.name} 채널 광고 문의`}
@@ -237,7 +225,7 @@ export default function YoutubeDashboardPage() {
                     </a>
                     <button
                       type="button"
-                      onClick={() => handleOpenDetail(channel.channel_id)}
+                      onClick={() => handleOpenDetail(channel.channel_id || channel.id)}
                       className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition shadow-xs cursor-pointer"
                     >
                       채널 상세 분석 <ChevronRight size={14} />
@@ -245,7 +233,7 @@ export default function YoutubeDashboardPage() {
                   </div>
                 </div>
 
-                {/* ★ 구독자수, 평균 조회수(롱폼), 평균 조회수(숏폼), 광고단가(PRO버전) 지표 영역 */}
+                {/* 지표 영역: 구독자수, 평균조회수(롱폼), 평균조회수(숏폼), 광고단가(PRO) */}
                 <div className="grid grid-cols-4 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100 text-xs">
                   <div>
                     <span className="text-slate-400">구독자 수</span>
@@ -274,7 +262,7 @@ export default function YoutubeDashboardPage() {
                   </div>
                 </div>
 
-                {/* 최근 발행 영상 피드 (썸네일 누락 방지 및 정상 매칭) */}
+                {/* 최근 발행 영상 피드 */}
                 <div className="space-y-2">
                   <p className="text-[11px] font-bold text-slate-400">최근 발행 영상 콘텐츠</p>
                   <div className="grid grid-cols-4 gap-3">
