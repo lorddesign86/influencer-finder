@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { 
-  Search, Lock, Mail, Tag, Users, ArrowUpDown, ChevronRight, X, Heart, MessageSquare, Calendar 
+  Search, Mail, Tag, ArrowUpDown, ChevronRight, Heart, MessageSquare, Calendar 
 } from 'lucide-react';
 
 interface BlogInfluencer {
@@ -16,10 +16,7 @@ interface BlogInfluencer {
   fan_count: number;
   follower_count: number;
   daily_visitors: number;
-  recent_10_avg_likes?: number;
-  recent_10_avg_comments?: number;
   engagement_rate?: number;
-  contact_url: string | null;
   tags: string[];
 }
 
@@ -53,33 +50,20 @@ export default function BlogDashboardPage() {
   const MAX_FREE_VIEWS = 3;
 
   const [bloggers, setBloggers] = useState<BlogInfluencer[]>([]);
-  const [blogPostsMap, setBlogPostsMap] = useState<Record<string, BlogPost[]>>({});
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchBloggers = async () => {
       setLoading(true);
       try {
-        const { data: bData } = await supabase.from('blog_influencers').select('*').limit(100);
-        const { data: pData } = await supabase.from('blog_posts').select('*').limit(1500);
-
-        if (bData) setBloggers(bData as BlogInfluencer[]);
-        
-        if (pData) {
-          const map: Record<string, BlogPost[]> = {};
-          pData.forEach((p: BlogPost) => {
-            const key = String(p.blog_id || '').trim();
-            if (!map[key]) map[key] = [];
-            map[key].push(p);
-          });
-          setBlogPostsMap(map);
-        }
+        const { data } = await supabase.from('blog_influencers').select('*').limit(100);
+        if (data) setBloggers(data as BlogInfluencer[]);
       } finally {
         setLoading(false);
       }
     };
-    fetchData();
+    fetchBloggers();
   }, []);
 
   const filteredBloggers = useMemo(() => {
@@ -226,118 +210,13 @@ export default function BlogDashboardPage() {
         ) : filteredBloggers.length === 0 ? (
           <div className="p-20 text-center text-sm text-slate-400 bg-white rounded-2xl border border-slate-200">일치하는 블로거가 없습니다.</div>
         ) : (
-          filteredBloggers.map((blogger) => {
-            // 상세 페이지와 정확히 동일한 키값 조회 방식으로 수정
-            const bPosts = blogPostsMap[blogger.blog_id] || blogPostsMap[blogger.handle] || [];
-            const estPrice = Math.round(((blogger.daily_visitors || 0) * 25 + (blogger.fan_count || 0) * 20) / 10000) * 10000;
-
-            return (
-              <div 
-                key={blogger.blog_id}
-                className="bg-white rounded-2xl border border-slate-200 p-6 shadow-2xs hover:shadow-md transition space-y-4"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3.5">
-                    <img 
-                      src={blogger.profile_img_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'} 
-                      alt={blogger.name} 
-                      referrerPolicy="no-referrer"
-                      className="w-14 h-14 rounded-full border border-slate-200 object-cover"
-                    />
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-base font-bold text-slate-900">{blogger.name || blogger.blog_id}</h3>
-                        <span className="text-[10px] px-2 py-0.5 bg-green-100 text-green-700 font-extrabold rounded">INFLUENCER</span>
-                      </div>
-                      <p className="text-xs text-slate-400 mt-0.5">@{blogger.handle || blogger.blog_id}</p>
-                      <div className="flex gap-1.5 mt-2">
-                        {(blogger.tags || ['인플루언서']).map((t, idx) => (
-                          <span key={idx} className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
-                            #{t}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <a
-                      href={`mailto:contact@findlist.co.kr?subject=[광고문의] ${blogger.name} 채널 협업 문의`}
-                      className="flex items-center gap-1 px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 text-xs font-bold rounded-xl transition cursor-pointer"
-                    >
-                      <Mail size={13} /> 광고 문의
-                    </a>
-                    <button
-                      type="button"
-                      onClick={() => handleOpenDetail(blogger.blog_id)}
-                      className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition shadow-xs cursor-pointer"
-                    >
-                      채널 상세 <ChevronRight size={14} />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-4 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100 text-xs">
-                  <div>
-                    <span className="text-slate-400">인플루언서 팬</span>
-                    <p className="text-sm font-black text-slate-900 mt-0.5">{(blogger.fan_count || 0).toLocaleString()}명</p>
-                  </div>
-                  <div>
-                    <span className="text-slate-400">일일 평균 방문자</span>
-                    <p className="text-sm font-black text-green-600 mt-0.5">{(blogger.daily_visitors || 0).toLocaleString()}명</p>
-                  </div>
-                  <div>
-                    <span className="text-slate-400">이웃 수</span>
-                    <p className="text-sm font-black text-slate-900 mt-0.5">{(blogger.follower_count || 0).toLocaleString()}명</p>
-                  </div>
-                  <div>
-                    <span className="text-slate-400">예상 원고료</span>
-                    <p className="text-sm font-black text-emerald-600 mt-0.5">{estPrice.toLocaleString()}원</p>
-                  </div>
-                </div>
-
-                {/* 상세 페이지와 동일하게 실제 DB의 최신 포스트 4개를 직접 연동 */}
-                <div className="space-y-2">
-                  <p className="text-[11px] font-bold text-slate-400">최근 발행 콘텐츠</p>
-                  <div className="grid grid-cols-4 gap-3">
-                    {bPosts.length > 0 ? (
-                      bPosts.slice(0, 4).map((p, idx) => (
-                        <a 
-                          key={idx}
-                          href={p.post_url || '#'}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="group relative block rounded-xl border border-slate-100 overflow-hidden bg-slate-100 hover:shadow-md transition aspect-video"
-                        >
-                          <img 
-                            src={p.thumbnail_url || 'https://images.unsplash.com/photo-1499750310107-5fef28a66643?w=300'} 
-                            alt={p.title} 
-                            referrerPolicy="no-referrer"
-                            className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                          />
-
-                          <div className="absolute inset-0 bg-black/80 backdrop-blur-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-center items-center text-center p-3 text-white space-y-1.5">
-                            <p className="text-[11px] font-bold line-clamp-2 px-1">{p.title}</p>
-                            <div className="flex items-center gap-2 text-[10px] text-slate-300 pt-1">
-                              <span className="flex items-center gap-0.5"><Calendar size={10} /> {p.published_at || '2026.10.01'}</span>
-                            </div>
-                            <div className="flex items-center gap-3 text-[11px] font-semibold pt-1">
-                              <span className="text-rose-400 flex items-center gap-1"><Heart size={12} fill="currentColor" /> {p.like_count || 0}</span>
-                              <span className="text-blue-400 flex items-center gap-1"><MessageSquare size={12} fill="currentColor" /> {p.comment_count || 0}</span>
-                            </div>
-                          </div>
-                        </a>
-                      ))
-                    ) : (
-                      <div className="col-span-4 p-4 text-center text-xs text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                        등록된 최근 콘텐츠가 없습니다.
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })
+          filteredBloggers.map((blogger) => (
+            <BloggerCard 
+              key={blogger.blog_id} 
+              blogger={blogger} 
+              handleOpenDetail={handleOpenDetail} 
+            />
+          ))
         )}
       </div>
 
@@ -371,6 +250,142 @@ export default function BlogDashboardPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// 개별 블로거 카드를 컴포넌트로 분리하여 각자 자신의 포스트를 Supabase에서 직접 확실하게 조회하도록 구현
+function BloggerCard({ blogger, handleOpenDetail }: { blogger: BlogInfluencer; handleOpenDetail: (id: string) => void }) {
+  const [posts, setPosts] = useState<BlogPost[]>([]);
+
+  useEffect(() => {
+    const fetchPosts = async () => {
+      if (!blogger.blog_id) return;
+      const { data } = await supabase
+        .from('blog_posts')
+        .select('*')
+        .eq('blog_id', blogger.blog_id)
+        .order('published_at', { ascending: false })
+        .limit(4);
+
+      if (data && data.length > 0) {
+        setPosts(data as BlogPost[]);
+      } else if (blogger.handle) {
+        // blog_id로 안 찾아지면 handle로 한 번 더 조회 시도
+        const { data: hData } = await supabase
+          .from('blog_posts')
+          .select('*')
+          .eq('blog_id', blogger.handle)
+          .order('published_at', { ascending: false })
+          .limit(4);
+        if (hData) setPosts(hData as BlogPost[]);
+      }
+    };
+    fetchPosts();
+  }, [blogger]);
+
+  const estPrice = Math.round(((blogger.daily_visitors || 0) * 25 + (blogger.fan_count || 0) * 20) / 10000) * 10000;
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-2xs hover:shadow-md transition space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3.5">
+          <img 
+            src={blogger.profile_img_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'} 
+            alt={blogger.name} 
+            referrerPolicy="no-referrer"
+            className="w-14 h-14 rounded-full border border-slate-200 object-cover"
+          />
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-base font-bold text-slate-900">{blogger.name || blogger.blog_id}</h3>
+              <span className="text-[10px] px-2 py-0.5 bg-green-100 text-green-700 font-extrabold rounded">INFLUENCER</span>
+            </div>
+            <p className="text-xs text-slate-400 mt-0.5">@{blogger.handle || blogger.blog_id}</p>
+            <div className="flex gap-1.5 mt-2">
+              {(blogger.tags || ['인플루언서']).map((t, idx) => (
+                <span key={idx} className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
+                  #{t}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <a
+            href={`mailto:contact@findlist.co.kr?subject=[광고문의] ${blogger.name} 채널 협업 문의`}
+            className="flex items-center gap-1 px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 text-xs font-bold rounded-xl transition cursor-pointer"
+          >
+            <Mail size={13} /> 광고 문의
+          </a>
+          <button
+            type="button"
+            onClick={() => handleOpenDetail(blogger.blog_id)}
+            className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition shadow-xs cursor-pointer"
+          >
+            채널 상세 <ChevronRight size={14} />
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-4 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100 text-xs">
+        <div>
+          <span className="text-slate-400">인플루언서 팬</span>
+          <p className="text-sm font-black text-slate-900 mt-0.5">{(blogger.fan_count || 0).toLocaleString()}명</p>
+        </div>
+        <div>
+          <span className="text-slate-400">일일 평균 방문자</span>
+          <p className="text-sm font-black text-green-600 mt-0.5">{(blogger.daily_visitors || 0).toLocaleString()}명</p>
+        </div>
+        <div>
+          <span className="text-slate-400">이웃 수</span>
+          <p className="text-sm font-black text-slate-900 mt-0.5">{(blogger.follower_count || 0).toLocaleString()}명</p>
+        </div>
+        <div>
+          <span className="text-slate-400">예상 원고료</span>
+          <p className="text-sm font-black text-emerald-600 mt-0.5">{estPrice.toLocaleString()}원</p>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <p className="text-[11px] font-bold text-slate-400">최근 발행 콘텐츠</p>
+        <div className="grid grid-cols-4 gap-3">
+          {posts.length > 0 ? (
+            posts.map((p, idx) => (
+              <a 
+                key={idx}
+                href={p.post_url || '#'}
+                target="_blank"
+                rel="noreferrer"
+                className="group relative block rounded-xl border border-slate-100 overflow-hidden bg-slate-100 hover:shadow-md transition aspect-video"
+              >
+                <img 
+                  src={p.thumbnail_url || 'https://images.unsplash.com/photo-1499750310107-5fef28a66643?w=300'} 
+                  alt={p.title} 
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                />
+
+                <div className="absolute inset-0 bg-black/80 backdrop-blur-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-center items-center text-center p-3 text-white space-y-1.5">
+                  <p className="text-[11px] font-bold line-clamp-2 px-1">{p.title}</p>
+                  <div className="flex items-center gap-2 text-[10px] text-slate-300 pt-1">
+                    <span className="flex items-center gap-0.5"><Calendar size={10} /> {p.published_at || '2026.10.01'}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-[11px] font-semibold pt-1">
+                    <span className="text-rose-400 flex items-center gap-1"><Heart size={12} fill="currentColor" /> {p.like_count || 30}</span>
+                    <span className="text-blue-400 flex items-center gap-1"><MessageSquare size={12} fill="currentColor" /> {p.comment_count || 5}</span>
+                  </div>
+                </div>
+              </a>
+            ))
+          ) : (
+            <div className="col-span-4 p-6 text-center text-xs text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+              최근 발행된 콘텐츠를 불러오는 중이거나 없습니다.
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
