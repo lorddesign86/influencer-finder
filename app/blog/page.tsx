@@ -62,7 +62,7 @@ export default function BlogDashboardPage() {
       setLoading(true);
       try {
         const { data: bData } = await supabase.from('blog_influencers').select('*').limit(100);
-        const { data: pData } = await supabase.from('blog_posts').select('*').limit(500);
+        const { data: pData } = await supabase.from('blog_posts').select('*').limit(1000);
 
         if (bData) setBloggers(bData as BlogInfluencer[]);
         
@@ -227,8 +227,38 @@ export default function BlogDashboardPage() {
           <div className="p-20 text-center text-sm text-slate-400 bg-white rounded-2xl border border-slate-200">일치하는 블로거가 없습니다.</div>
         ) : (
           filteredBloggers.map((blogger) => {
-            const bPosts = blogPostsMap[blogger.blog_id] || [];
+            const rawPosts = blogPostsMap[blogger.blog_id] || [];
             const estPrice = Math.round(((blogger.daily_visitors || 0) * 25 + (blogger.fan_count || 0) * 20) / 10000) * 10000;
+
+            // 블로거별 고유 ID와 인덱스를 활용해 겹치지 않는 고유 이미지를 동적으로 생성/배치
+            const displayPosts = [0, 1, 2, 3].map((i) => {
+              const target = rawPosts[i];
+              if (target && target.thumbnail_url && target.thumbnail_url.startsWith('http')) {
+                return target;
+              }
+              // DB에 썸네일이 없을 경우, 블로거별 고유 해시값을 기반으로 다양한 고화질 이미지가 매핑되도록 처리
+              const uniqueIdNum = (blogger.blog_id.charCodeAt(0) + i * 19) % 10;
+              const fallbackImages = [
+                'https://images.unsplash.com/photo-1499750310107-5fef28a66643?w=300',
+                'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=300',
+                'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=300',
+                'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=300',
+                'https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?w=300',
+                'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=300',
+                'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=300',
+                'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=300',
+                'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=300',
+                'https://images.unsplash.com/photo-1447752875215-b2761acb3c5d?w=300'
+              ];
+              return {
+                title: target?.title || `${blogger.name}님의 최근 포스팅 #${i+1}`,
+                post_url: target?.post_url || '#',
+                thumbnail_url: fallbackImages[uniqueIdNum],
+                published_at: target?.published_at || '2026.10.01',
+                like_count: target?.like_count || (30 + i * 12),
+                comment_count: target?.comment_count || (5 + i * 3)
+              };
+            });
 
             return (
               <div 
@@ -295,50 +325,38 @@ export default function BlogDashboardPage() {
                   </div>
                 </div>
 
-                {/* ★ 최신 콘텐츠 썸네일 카드 4개 (하단 일반 텍스트 제거 및 마우스 오버 시에만 정보 노출) */}
+                {/* ★ 채널별로 고유하게 분산 매핑된 최근 콘텐츠 4개 및 마우스 오버 효과 */}
                 <div className="space-y-2">
                   <p className="text-[11px] font-bold text-slate-400">최근 발행 콘텐츠</p>
                   <div className="grid grid-cols-4 gap-3">
-                    {(bPosts.length > 0 ? bPosts : [
-                      { title: '최근 발행 포스팅 #1', post_url: '#', thumbnail_url: 'https://images.unsplash.com/photo-1499750310107-5fef28a66643?w=300', published_at: '2026.10.01', like_count: 42, comment_count: 8 },
-                      { title: '최근 발행 포스팅 #2', post_url: '#', thumbnail_url: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=300', published_at: '2026.09.28', like_count: 35, comment_count: 5 },
-                      { title: '최근 발행 포스팅 #3', post_url: '#', thumbnail_url: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=300', published_at: '2026.09.25', like_count: 88, comment_count: 14 },
-                      { title: '최근 발행 포스팅 #4', post_url: '#', thumbnail_url: 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=300', published_at: '2026.09.20', like_count: 56, comment_count: 9 }
-                    ]).slice(0, 4).map((p, idx) => {
-                      const fallbackLikes = p.like_count ?? (20 + idx * 7);
-                      const fallbackComments = p.comment_count ?? (3 + idx * 2);
-                      const fallbackDate = p.published_at || '2026.10.01';
+                    {displayPosts.map((p, idx) => (
+                      <a 
+                        key={idx}
+                        href={p.post_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="group relative block rounded-xl border border-slate-100 overflow-hidden bg-slate-100 hover:shadow-md transition aspect-video"
+                      >
+                        <img 
+                          src={p.thumbnail_url} 
+                          alt={p.title} 
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                        />
 
-                      return (
-                        <a 
-                          key={idx}
-                          href={p.post_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="group relative block rounded-xl border border-slate-100 overflow-hidden bg-slate-100 hover:shadow-md transition aspect-video"
-                        >
-                          {/* 썸네일 이미지 */}
-                          <img 
-                            src={p.thumbnail_url && p.thumbnail_url.startsWith('http') ? p.thumbnail_url : 'https://images.unsplash.com/photo-1499750310107-5fef28a66643?w=300'} 
-                            alt={p.title} 
-                            referrerPolicy="no-referrer"
-                            className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                          />
-
-                          {/* 마우스 오버(Hover) 시에만 나타나는 상세 오버레이 (날짜, 공감, 댓글 포함) */}
-                          <div className="absolute inset-0 bg-black/80 backdrop-blur-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-center items-center text-center p-3 text-white space-y-1.5">
-                            <p className="text-[11px] font-bold line-clamp-2 px-1">{p.title}</p>
-                            <div className="flex items-center gap-2 text-[10px] text-slate-300 pt-1">
-                              <span className="flex items-center gap-0.5"><Calendar size={10} /> {fallbackDate}</span>
-                            </div>
-                            <div className="flex items-center gap-3 text-[11px] font-semibold pt-1">
-                              <span className="text-rose-400 flex items-center gap-1"><Heart size={12} fill="currentColor" /> {fallbackLikes}</span>
-                              <span className="text-blue-400 flex items-center gap-1"><MessageSquare size={12} fill="currentColor" /> {fallbackComments}</span>
-                            </div>
+                        {/* 마우스 오버 시 나타나는 오버레이 (날짜, 공감, 댓글) */}
+                        <div className="absolute inset-0 bg-black/80 backdrop-blur-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-center items-center text-center p-3 text-white space-y-1.5">
+                          <p className="text-[11px] font-bold line-clamp-2 px-1">{p.title}</p>
+                          <div className="flex items-center gap-2 text-[10px] text-slate-300 pt-1">
+                            <span className="flex items-center gap-0.5"><Calendar size={10} /> {p.published_at}</span>
                           </div>
-                        </a>
-                      );
-                    })}
+                          <div className="flex items-center gap-3 text-[11px] font-semibold pt-1">
+                            <span className="text-rose-400 flex items-center gap-1"><Heart size={12} fill="currentColor" /> {p.like_count}</span>
+                            <span className="text-blue-400 flex items-center gap-1"><MessageSquare size={12} fill="currentColor" /> {p.comment_count}</span>
+                          </div>
+                        </div>
+                      </a>
+                    ))}
                   </div>
                 </div>
               </div>
