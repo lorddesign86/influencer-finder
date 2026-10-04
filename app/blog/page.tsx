@@ -17,6 +17,7 @@ interface BlogInfluencer {
   follower_count: number;
   daily_visitors: number;
   engagement_rate?: number;
+  contact_url: string | null;
   tags: string[];
 }
 
@@ -50,31 +51,70 @@ export default function BlogDashboardPage() {
   const MAX_FREE_VIEWS = 3;
 
   const [bloggers, setBloggers] = useState<BlogInfluencer[]>([]);
+  const [blogPostsMap, setBlogPostsMap] = useState<Record<string, BlogPost[]>>({});
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const fetchBloggers = async () => {
+    const fetchData = async () => {
       setLoading(true);
       try {
-        const { data } = await supabase.from('blog_influencers').select('*').limit(100);
-        if (data) setBloggers(data as BlogInfluencer[]);
+        const { data: bData } = await supabase.from('blog_influencers').select('*').limit(500);
+        const { data: pData } = await supabase.from('blog_posts').select('*').limit(2000);
+
+        if (bData) setBloggers(bData as BlogInfluencer[]);
+        
+        if (pData) {
+          const map: Record<string, BlogPost[]> = {};
+          pData.forEach((p: BlogPost) => {
+            const key = String(p.blog_id || '').trim().toLowerCase();
+            if (!map[key]) map[key] = [];
+            map[key].push(p);
+          });
+          setBlogPostsMap(map);
+        }
       } finally {
         setLoading(false);
       }
     };
-    fetchBloggers();
+    fetchData();
   }, []);
 
+  // ★ 유연하고 강력한 통합 검색 필터 시스템 (이름, 핸들, 태그, 포스트 제목/내용 모두 검색)
   const filteredBloggers = useMemo(() => {
     return bloggers
       .filter((item) => {
         const rawQ = (search || '').trim().toLowerCase();
+        const keywords = rawQ.split(/\s+/).filter(Boolean);
+
         const nameRaw = (item.name || '').toLowerCase();
+        const handleRaw = (item.handle || item.blog_id || '').toLowerCase();
         const tagsArr = Array.isArray(item.tags) ? item.tags.map(t => (t || '').toLowerCase()) : [];
         
-        const matchesSearch = !rawQ || nameRaw.includes(rawQ) || tagsArr.some(t => t.includes(rawQ));
-        const matchesCat = blogCat === '전체' || tagsArr.some(t => t.includes(blogCat.toLowerCase()));
+        // 해당 블로거의 포스트 내용 모음
+        const bPosts = blogPostsMap[String(item.blog_id || '').trim().toLowerCase()] || 
+                       blogPostsMap[String(item.handle || '').trim().toLowerCase()] || [];
+        
+        const postsTextCombined = bPosts.map(p => `${p.title || ''} ${p.summary || ''}`).join(' ').toLowerCase();
+
+        // 카테고리 필터 매칭
+        const matchesCat = blogCat === '전체' || 
+          tagsArr.some(t => t.includes(blogCat.toLowerCase())) ||
+          nameRaw.includes(blogCat.toLowerCase()) ||
+          postsTextCombined.includes(blogCat.toLowerCase());
+
+        // 검색어가 없을 경우 카테고리만 적용
+        if (keywords.length === 0) {
+          return matchesCat;
+        }
+
+        // 검색어 중 하나라도 이름, 핸들, 태그, 포스트 제목/내용에 포함되면 통과 (유연한 OR 매칭)
+        const matchesSearch = keywords.some(kw => 
+          nameRaw.includes(kw) || 
+          handleRaw.includes(kw) || 
+          tagsArr.some(t => t.includes(kw)) ||
+          postsTextCombined.includes(kw)
+        );
 
         return matchesSearch && matchesCat;
       })
@@ -88,7 +128,7 @@ export default function BlogDashboardPage() {
         if (blogSort === 'price_desc') return bPrice - aPrice;
         return 0;
       });
-  }, [bloggers, search, blogCat, blogSort]);
+  }, [bloggers, blogPostsMap, search, blogCat, blogSort]);
 
   const handleOpenDetail = (blogId: string) => {
     if (!isProUser && viewCount >= MAX_FREE_VIEWS) {
@@ -112,7 +152,7 @@ export default function BlogDashboardPage() {
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
             <input 
               type="text" 
-              placeholder="찾고 싶은 블로그 키워드나 주제를 입력하세요 (예: 일본여행, 맛집)" 
+              placeholder="찾고 싶은 블로그 키워드나 주제를 입력하세요 (예: 맛집, 일본여행, 육아)" 
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-12 pr-4 py-3 border border-slate-200 rounded-full text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-green-600 transition shadow-inner"
@@ -208,12 +248,13 @@ export default function BlogDashboardPage() {
         {loading ? (
           <div className="p-20 text-center text-sm text-slate-400">인플루언서 데이터를 불러오는 중...</div>
         ) : filteredBloggers.length === 0 ? (
-          <div className="p-20 text-center text-sm text-slate-400 bg-white rounded-2xl border border-slate-200">일치하는 블로거가 없습니다.</div>
+          <div className="p-20 text-center text-sm text-slate-400 bg-white rounded-2xl border border-slate-200">일치하는 블로거가 없습니다. 검색어를 다르게 입력해 보세요.</div>
         ) : (
           filteredBloggers.map((blogger) => (
             <BloggerCard 
               key={blogger.blog_id} 
               blogger={blogger} 
+              blogPostsMap={blogPostsMap}
               handleOpenDetail={handleOpenDetail} 
             />
           ))
@@ -254,35 +295,11 @@ export default function BlogDashboardPage() {
   );
 }
 
-// 개별 블로거 카드를 컴포넌트로 분리하여 각자 자신의 포스트를 Supabase에서 직접 확실하게 조회하도록 구현
-function BloggerCard({ blogger, handleOpenDetail }: { blogger: BlogInfluencer; handleOpenDetail: (id: string) => void }) {
-  const [posts, setPosts] = useState<BlogPost[]>([]);
-
-  useEffect(() => {
-    const fetchPosts = async () => {
-      if (!blogger.blog_id) return;
-      const { data } = await supabase
-        .from('blog_posts')
-        .select('*')
-        .eq('blog_id', blogger.blog_id)
-        .order('published_at', { ascending: false })
-        .limit(4);
-
-      if (data && data.length > 0) {
-        setPosts(data as BlogPost[]);
-      } else if (blogger.handle) {
-        // blog_id로 안 찾아지면 handle로 한 번 더 조회 시도
-        const { data: hData } = await supabase
-          .from('blog_posts')
-          .select('*')
-          .eq('blog_id', blogger.handle)
-          .order('published_at', { ascending: false })
-          .limit(4);
-        if (hData) setPosts(hData as BlogPost[]);
-      }
-    };
-    fetchPosts();
-  }, [blogger]);
+// 개별 블로거 카드 컴포넌트
+function BloggerCard({ blogger, blogPostsMap, handleOpenDetail }: { blogger: BlogInfluencer; blogPostsMap: Record<string, BlogPost[]>; handleOpenDetail: (id: string) => void }) {
+  const bKey = String(blogger.blog_id || '').trim().toLowerCase();
+  const hKey = String(blogger.handle || '').trim().toLowerCase();
+  const posts = blogPostsMap[bKey] || blogPostsMap[hKey] || [];
 
   const estPrice = Math.round(((blogger.daily_visitors || 0) * 25 + (blogger.fan_count || 0) * 20) / 10000) * 10000;
 
@@ -352,7 +369,7 @@ function BloggerCard({ blogger, handleOpenDetail }: { blogger: BlogInfluencer; h
         <p className="text-[11px] font-bold text-slate-400">최근 발행 콘텐츠</p>
         <div className="grid grid-cols-4 gap-3">
           {posts.length > 0 ? (
-            posts.map((p, idx) => (
+            posts.slice(0, 4).map((p, idx) => (
               <a 
                 key={idx}
                 href={p.post_url || '#'}
@@ -381,7 +398,7 @@ function BloggerCard({ blogger, handleOpenDetail }: { blogger: BlogInfluencer; h
             ))
           ) : (
             <div className="col-span-4 p-6 text-center text-xs text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-              최근 발행된 콘텐츠를 불러오는 중이거나 없습니다.
+              최근 발행된 콘텐츠가 없습니다.
             </div>
           )}
         </div>
