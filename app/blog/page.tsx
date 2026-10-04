@@ -295,7 +295,7 @@ export default function BlogDashboardPage() {
                   </div>
                 </div>
 
-                {/* ★ 최신 콘텐츠 썸네일 카드 4개 및 마우스 오버(Hover) 시 날짜/공감/댓글 노출 오버레이 */}
+                {/* ★ 최신 콘텐츠 썸네일 카드 4개 (하단 일반 텍스트 제거 및 마우스 오버 시에만 정보 노출) */}
                 <div className="space-y-2">
                   <p className="text-[11px] font-bold text-slate-400">최근 발행 콘텐츠</p>
                   <div className="grid grid-cols-4 gap-3">
@@ -317,7 +317,7 @@ export default function BlogDashboardPage() {
                           rel="noreferrer"
                           className="group relative block rounded-xl border border-slate-100 overflow-hidden bg-slate-100 hover:shadow-md transition aspect-video"
                         >
-                          {/* 썸네일 이미지 (외부 차단 방지 fallback 포함) */}
+                          {/* 썸네일 이미지 */}
                           <img 
                             src={p.thumbnail_url && p.thumbnail_url.startsWith('http') ? p.thumbnail_url : 'https://images.unsplash.com/photo-1499750310107-5fef28a66643?w=300'} 
                             alt={p.title} 
@@ -325,12 +325,7 @@ export default function BlogDashboardPage() {
                             className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
                           />
 
-                          {/* 썸네일 하단 고정 타이틀 */}
-                          <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-2 pt-6">
-                            <p className="text-[11px] font-bold text-white truncate">{p.title}</p>
-                          </div>
-
-                          {/* ★ 마우스 오버(Hover) 시 나타나는 상세 정보 오버레이 */}
+                          {/* 마우스 오버(Hover) 시에만 나타나는 상세 오버레이 (날짜, 공감, 댓글 포함) */}
                           <div className="absolute inset-0 bg-black/80 backdrop-blur-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-center items-center text-center p-3 text-white space-y-1.5">
                             <p className="text-[11px] font-bold line-clamp-2 px-1">{p.title}</p>
                             <div className="flex items-center gap-2 text-[10px] text-slate-300 pt-1">
