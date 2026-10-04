@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { 
-  Search, Mail, Tag, ArrowUpDown, ChevronRight, Eye, ThumbsUp, MessageSquare, PlaySquare, Users, Lock, Sparkles 
+  Search, Tag, ChevronRight, Eye, Lock, Sparkles 
 } from 'lucide-react';
 
 interface YoutubeInfluencer {
@@ -46,8 +46,12 @@ export default function YoutubeDashboardPage() {
     const fetchYoutubeData = async () => {
       setLoading(true);
       try {
-        const { data: cData } = await supabase.from('youtube_channels').select('*').limit(300);
-        const { data: vData } = await supabase.from('youtube_videos').select('*').limit(1500);
+        // 실제 Supabase 유튜브 채널 및 영상 테이블 조회
+        const { data: cData, error: cErr } = await supabase.from('youtube_channels').select('*').limit(300);
+        const { data: vData, error: vErr } = await supabase.from('youtube_videos').select('*').limit(1500);
+
+        if (cErr) console.error('youtube_channels fetch error:', cErr);
+        if (vErr) console.error('youtube_videos fetch error:', vErr);
 
         if (cData) setChannels(cData as YoutubeInfluencer[]);
         
@@ -67,21 +71,18 @@ export default function YoutubeDashboardPage() {
     fetchYoutubeData();
   }, []);
 
-  // ★ 기본 메인 화면 및 검색 필터링 로직
+  // ★ 기본 메인 화면: 구독자 50만 이상 채널 중 5개 선별, 검색 시 전체 필터링
   const displayedChannels = useMemo(() => {
     const q = search.trim().toLowerCase();
     
-    // 1. 검색어나 태그가 없을 경우: 구독자 50만 이상인 채널 중 랜덤 5개 추출
+    // 1. 검색어나 태그가 없을 경우: 구독자 50만 이상 채널 우선 5개 추출 (없으면 상위 5개)
     if (!q && selectedTag === '전체') {
-      const over500k = channels.filter(c => (c.subscriber_count || 0) >= 500000);
-      const targetPool = over500k.length >= 5 ? over500k : channels; // 50만 이상이 없으면 전체에서 추출
-      
-      // 랜덤 셔플 후 5개 반환
-      const shuffled = [...targetPool].sort(() => 0.5 - Math.random());
-      return { list: shuffled.slice(0, 5), isDefaultRandom: true };
+      const over500k = channels.filter(c => (Number(c.subscriber_count) || 0) >= 500000);
+      const targetPool = over500k.length > 0 ? over500k : channels;
+      return { list: targetPool.slice(0, 5), isDefaultRecommend: true };
     }
 
-    // 2. 검색어 또는 태그가 있을 경우: 전체 대상 필터링
+    // 2. 검색어 또는 태그가 있을 경우 필터링
     const filtered = channels.filter((item) => {
       const tags = Array.isArray(item.tags) ? item.tags.map(t => (t || '').toLowerCase()) : [];
       const matchesCat = selectedTag === '전체' || 
@@ -102,8 +103,7 @@ export default function YoutubeDashboardPage() {
       );
     });
 
-    // 무료 회원이면 최대 5개까지만 보여주고 PRO 유도로 끊어줄 수 있음 (선택 사항)
-    return { list: filtered, isDefaultRandom: false };
+    return { list: filtered, isDefaultRecommend: false };
   }, [channels, search, selectedTag]);
 
   const handleOpenDetail = (channelId: string) => {
@@ -119,7 +119,7 @@ export default function YoutubeDashboardPage() {
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
             <input 
               type="text" 
-              placeholder="키워드 검색 (예: 해외여행 준비물, 브이로그, 맛집...)" 
+              placeholder="유튜버 이름이나 키워드를 검색하세요 (예: 브이로그, 맛집, 여행...)" 
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-12 pr-4 py-3 border border-slate-200 rounded-full text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500 transition shadow-inner"
@@ -158,14 +158,13 @@ export default function YoutubeDashboardPage() {
       {/* 채널 리스트 피드 */}
       <div className="max-w-5xl mx-auto w-full p-8 space-y-4">
         
-        {/* 안내 배너 (기본 화면일 때) */}
-        {displayedChannels.isDefaultRandom && (
+        {displayedChannels.isDefaultRecommend && (
           <div className="bg-gradient-to-r from-red-50 to-rose-50 border border-red-200 p-4 rounded-2xl flex items-center justify-between text-xs text-red-900 shadow-2xs">
             <div className="flex items-center gap-2 font-bold">
               <Sparkles size={16} className="text-red-600" />
-              <span>실시간 추천 50만+ 구독자 대형 유튜버 파워 채널 (랜덤 5선)</span>
+              <span>실시간 추천 50만+ 구독자 대형 유튜버 파워 채널 베스트 5</span>
             </div>
-            <span className="text-[11px] text-red-600 font-semibold">검색창에서 원하는 키워드를 입력해 보세요!</span>
+            <span className="text-[11px] text-red-600 font-semibold">검색창에서 원하는 크리에이터를 검색해 보세요!</span>
           </div>
         )}
 
@@ -181,7 +180,7 @@ export default function YoutubeDashboardPage() {
           displayedChannels.list.map((channel) => {
             const cKey = String(channel.channel_id || '').trim().toLowerCase();
             const vList = videosMap[cKey] || [];
-            const estPrice = Math.round(((channel.subscriber_count || 10000) * 0.05 + (channel.total_view_count || 50000) * 0.001) / 10000) * 10000;
+            const estPrice = Math.round(((Number(channel.subscriber_count) || 10000) * 0.05 + (Number(channel.total_view_count) || 50000) * 0.001) / 10000) * 10000;
 
             const fallbackThumbs = [
               'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=300',
@@ -210,7 +209,7 @@ export default function YoutubeDashboardPage() {
                       </div>
                       <p className="text-xs text-slate-400 mt-0.5">@{channel.handle || channel.channel_id}</p>
                       <div className="flex gap-1.5 mt-2">
-                        {(channel.tags || ['크리에이터']).map((t, idx) => (
+                        {(Array.isArray(channel.tags) ? channel.tags : ['크리에이터']).map((t, idx) => (
                           <span key={idx} className="text-[10px] font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-100">
                             #{t}
                           </span>
@@ -233,15 +232,15 @@ export default function YoutubeDashboardPage() {
                 <div className="grid grid-cols-4 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100 text-xs">
                   <div>
                     <span className="text-slate-400">구독자 수</span>
-                    <p className="text-sm font-black text-slate-900 mt-0.5">{(channel.subscriber_count || 0).toLocaleString()}명</p>
+                    <p className="text-sm font-black text-slate-900 mt-0.5">{(Number(channel.subscriber_count) || 0).toLocaleString()}명</p>
                   </div>
                   <div>
                     <span className="text-slate-400">총 조회수</span>
-                    <p className="text-sm font-black text-red-600 mt-0.5">{(channel.total_view_count || 0).toLocaleString()}회</p>
+                    <p className="text-sm font-black text-red-600 mt-0.5">{(Number(channel.total_view_count) || 0).toLocaleString()}회</p>
                   </div>
                   <div>
                     <span className="text-slate-400">누적 영상 수</span>
-                    <p className="text-sm font-black text-slate-900 mt-0.5">{(channel.video_count || 0).toLocaleString()}개</p>
+                    <p className="text-sm font-black text-slate-900 mt-0.5">{(Number(channel.video_count) || 0).toLocaleString()}개</p>
                   </div>
                   <div>
                     <span className="text-slate-400">예상 광고 단가</span>
@@ -262,7 +261,7 @@ export default function YoutubeDashboardPage() {
                           <img src={thumb} alt="" className="w-full h-full object-cover group-hover:scale-105 transition duration-300" referrerPolicy="no-referrer" />
                           <div className="absolute inset-0 bg-black/80 backdrop-blur-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-center items-center text-center p-3 text-white space-y-1">
                             <p className="text-[11px] font-bold line-clamp-2 px-1">{title}</p>
-                            <span className="text-[10px] text-rose-400 flex items-center gap-1"><Eye size={10} /> {(v?.view_count || 15000).toLocaleString()}회</span>
+                            <span className="text-[10px] text-rose-400 flex items-center gap-1"><Eye size={10} /> {(Number(v?.view_count) || 15000).toLocaleString()}회</span>
                           </div>
                         </div>
                       );
@@ -274,7 +273,7 @@ export default function YoutubeDashboardPage() {
           })
         )}
 
-        {/* ★ 하단 PRO 버전 이용시 더 많은 리스트 보기 버튼 섹션 */}
+        {/* 하단 PRO 버전 이용 유도 섹션 */}
         {!isProUser && (
           <div className="bg-white rounded-3xl border border-slate-200 p-8 text-center space-y-4 shadow-xs mt-8">
             <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-2xl mx-auto flex items-center justify-center font-bold">
@@ -283,7 +282,7 @@ export default function YoutubeDashboardPage() {
             <div className="space-y-1 max-w-md mx-auto">
               <h3 className="text-sm font-black text-slate-900">더 많은 유튜브 인플루언서 리스트가 기다리고 있습니다</h3>
               <p className="text-xs text-slate-500">
-                무료 버전에서는 샘플 채널만 제공됩니다. PRO 플랜으로 업그레이드하고 1,000명 이상의 전체 크리에이터 데이터베이스와 상세 지표를 무제한으로 탐색하세요!
+                무료 버전에서는 샘플 채널만 제공됩니다. PRO 플랜으로 업그레이드하고 전체 크리에이터 데이터베이스와 상세 지표를 무제한으로 탐색하세요!
               </p>
             </div>
             <button 
