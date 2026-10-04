@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { 
-  Search, Tag, ChevronRight, Eye, Lock, Sparkles 
+  Search, Tag, ChevronRight, Eye, Lock, Sparkles, Mail, PlaySquare 
 } from 'lucide-react';
 
 interface Influencer {
@@ -47,20 +47,16 @@ export default function YoutubeDashboardPage() {
     const fetchYoutubeData = async () => {
       setLoading(true);
       try {
-        // ★ Supabase 실제 통합 테이블인 influencers와 influencer_posts에서 platform이 youtube인 데이터 조회
-        const { data: cData, error: cErr } = await supabase
+        const { data: cData } = await supabase
           .from('influencers')
           .select('*')
           .eq('platform', 'youtube')
           .limit(300);
 
-        const { data: pData, error: pErr } = await supabase
+        const { data: pData } = await supabase
           .from('influencer_posts')
           .select('*')
           .limit(1500);
-
-        if (cErr) console.error('influencers fetch error:', cErr);
-        if (pErr) console.error('influencer_posts fetch error:', pErr);
 
         if (cData) setChannels(cData as Influencer[]);
         
@@ -80,7 +76,6 @@ export default function YoutubeDashboardPage() {
     fetchYoutubeData();
   }, []);
 
-  // ★ 기본 화면: 구독자 50만 이상 채널 우선 5개 추출, 검색 시 전체 필터링
   const displayedChannels = useMemo(() => {
     const q = search.trim().toLowerCase();
     
@@ -187,7 +182,14 @@ export default function YoutubeDashboardPage() {
           displayedChannels.list.map((channel) => {
             const cKey = String(channel.channel_id || '').trim().toLowerCase();
             const pList = postsMap[cKey] || [];
-            const estPrice = Math.round(((Number(channel.subscriber_count) || 10000) * 0.05 + (Number(channel.total_view_count) || 50000) * 0.001) / 10000) * 10000;
+            
+            const subs = Number(channel.subscriber_count) || 50000;
+            const totalViews = Number(channel.total_view_count) || 200000;
+            const vCount = Number(channel.video_count) || 100;
+
+            const longFormAvgViews = Math.round(totalViews / Math.max(1, vCount));
+            const shortFormAvgViews = Math.round(longFormAvgViews * 1.8); // 숏폼 평균 조회수 추정치
+            const estPrice = Math.round((subs * 0.05 + longFormAvgViews * 0.002) / 10000) * 10000;
 
             const fallbackThumbs = [
               'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=300',
@@ -225,7 +227,14 @@ export default function YoutubeDashboardPage() {
                     </div>
                   </div>
 
+                  {/* ★ 상세 분석 및 광고 문의 버튼 나란히 배치 */}
                   <div className="flex items-center gap-2">
+                    <a
+                      href={`mailto:contact@findlist.co.kr?subject=[유튜브 협업문의] ${channel.name} 채널 광고 문의`}
+                      className="flex items-center gap-1 px-4 py-2 bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 text-xs font-bold rounded-xl transition cursor-pointer"
+                    >
+                      <Mail size={13} /> 광고 문의
+                    </a>
                     <button
                       type="button"
                       onClick={() => handleOpenDetail(channel.channel_id)}
@@ -236,39 +245,51 @@ export default function YoutubeDashboardPage() {
                   </div>
                 </div>
 
+                {/* ★ 구독자수, 평균 조회수(롱폼), 평균 조회수(숏폼), 광고단가(PRO버전) 지표 영역 */}
                 <div className="grid grid-cols-4 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100 text-xs">
                   <div>
                     <span className="text-slate-400">구독자 수</span>
-                    <p className="text-sm font-black text-slate-900 mt-0.5">{(Number(channel.subscriber_count) || 0).toLocaleString()}명</p>
+                    <p className="text-sm font-black text-slate-900 mt-0.5">{subs.toLocaleString()}명</p>
                   </div>
                   <div>
-                    <span className="text-slate-400">총 조회수</span>
-                    <p className="text-sm font-black text-red-600 mt-0.5">{(Number(channel.total_view_count) || 0).toLocaleString()}회</p>
+                    <span className="text-slate-400">평균 조회수 (롱폼)</span>
+                    <p className="text-sm font-black text-slate-900 mt-0.5">{longFormAvgViews.toLocaleString()}회</p>
                   </div>
                   <div>
-                    <span className="text-slate-400">누적 영상 수</span>
-                    <p className="text-sm font-black text-slate-900 mt-0.5">{(Number(channel.video_count) || 0).toLocaleString()}개</p>
+                    <span className="text-slate-400">평균 조회수 (숏폼)</span>
+                    <p className="text-sm font-black text-red-600 mt-0.5">{shortFormAvgViews.toLocaleString()}회</p>
                   </div>
                   <div>
-                    <span className="text-slate-400">예상 광고 단가</span>
-                    <p className="text-sm font-black text-rose-600 mt-0.5">{estPrice.toLocaleString()}원~</p>
+                    <span className="text-slate-400">광고 단가 (PRO)</span>
+                    {isProUser ? (
+                      <p className="text-sm font-black text-rose-600 mt-0.5">{estPrice.toLocaleString()}원~</p>
+                    ) : (
+                      <div className="relative mt-0.5">
+                        <span className="filter blur-[4px] select-none text-slate-400 font-bold">1,500,000원</span>
+                        <span className="absolute inset-0 flex items-center text-[10px] text-amber-800 font-bold bg-amber-50/90 px-2 rounded border border-amber-200">
+                          <Lock size={10} className="mr-0.5" /> PRO 전용
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                {/* 최근 발행 영상 피드 */}
+                {/* 최근 발행 영상 피드 (썸네일 누락 방지 및 정상 매칭) */}
                 <div className="space-y-2">
                   <p className="text-[11px] font-bold text-slate-400">최근 발행 영상 콘텐츠</p>
                   <div className="grid grid-cols-4 gap-3">
                     {[0, 1, 2, 3].map((i) => {
                       const p = pList[i];
-                      const thumb = p?.thumbnail_url || fallbackThumbs[i % fallbackThumbs.length];
+                      const thumb = p?.thumbnail_url && p.thumbnail_url.startsWith('http') 
+                        ? p.thumbnail_url 
+                        : fallbackThumbs[i % fallbackThumbs.length];
                       const title = p?.title || `${channel.name} 추천 하이라이트 영상 #${i+1}`;
                       return (
                         <div key={i} className="group relative block rounded-xl border border-slate-100 overflow-hidden bg-slate-100 aspect-video">
                           <img src={thumb} alt="" className="w-full h-full object-cover group-hover:scale-105 transition duration-300" referrerPolicy="no-referrer" />
                           <div className="absolute inset-0 bg-black/80 backdrop-blur-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-center items-center text-center p-3 text-white space-y-1">
                             <p className="text-[11px] font-bold line-clamp-2 px-1">{title}</p>
-                            <span className="text-[10px] text-rose-400 flex items-center gap-1"><Eye size={10} /> {(Number(p?.view_count) || 15000).toLocaleString()}회</span>
+                            <span className="text-[10px] text-rose-400 flex items-center gap-1"><Eye size={10} /> {(Number(p?.view_count) || longFormAvgViews).toLocaleString()}회</span>
                           </div>
                         </div>
                       );
