@@ -7,7 +7,9 @@ import {
   Search, Tag, ChevronRight, Eye, Lock, Sparkles 
 } from 'lucide-react';
 
-interface YoutubeInfluencer {
+interface Influencer {
+  id: number;
+  platform: string;
   channel_id: string;
   name: string;
   handle: string;
@@ -18,13 +20,12 @@ interface YoutubeInfluencer {
   tags: string[];
 }
 
-interface YoutubeVideo {
-  video_id: string;
+interface InfluencerPost {
+  id: number;
   channel_id: string;
   title: string;
   thumbnail_url: string;
   view_count: number;
-  like_count: number;
   published_at: string;
 }
 
@@ -38,31 +39,39 @@ export default function YoutubeDashboardPage() {
   const [search, setSearch] = useState('');
   const [selectedTag, setSelectedTag] = useState('전체');
   
-  const [channels, setChannels] = useState<YoutubeInfluencer[]>([]);
-  const [videosMap, setVideosMap] = useState<Record<string, YoutubeVideo[]>>({});
+  const [channels, setChannels] = useState<Influencer[]>([]);
+  const [postsMap, setPostsMap] = useState<Record<string, InfluencerPost[]>>({});
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const fetchYoutubeData = async () => {
       setLoading(true);
       try {
-        // 실제 Supabase 유튜브 채널 및 영상 테이블 조회
-        const { data: cData, error: cErr } = await supabase.from('youtube_channels').select('*').limit(300);
-        const { data: vData, error: vErr } = await supabase.from('youtube_videos').select('*').limit(1500);
+        // ★ Supabase 실제 통합 테이블인 influencers와 influencer_posts에서 platform이 youtube인 데이터 조회
+        const { data: cData, error: cErr } = await supabase
+          .from('influencers')
+          .select('*')
+          .eq('platform', 'youtube')
+          .limit(300);
 
-        if (cErr) console.error('youtube_channels fetch error:', cErr);
-        if (vErr) console.error('youtube_videos fetch error:', vErr);
+        const { data: pData, error: pErr } = await supabase
+          .from('influencer_posts')
+          .select('*')
+          .limit(1500);
 
-        if (cData) setChannels(cData as YoutubeInfluencer[]);
+        if (cErr) console.error('influencers fetch error:', cErr);
+        if (pErr) console.error('influencer_posts fetch error:', pErr);
+
+        if (cData) setChannels(cData as Influencer[]);
         
-        if (vData) {
-          const map: Record<string, YoutubeVideo[]> = {};
-          vData.forEach((v: YoutubeVideo) => {
-            const key = String(v.channel_id || '').trim().toLowerCase();
+        if (pData) {
+          const map: Record<string, InfluencerPost[]> = {};
+          pData.forEach((p: InfluencerPost) => {
+            const key = String(p.channel_id || '').trim().toLowerCase();
             if (!map[key]) map[key] = [];
-            map[key].push(v);
+            map[key].push(p);
           });
-          setVideosMap(map);
+          setPostsMap(map);
         }
       } finally {
         setLoading(false);
@@ -71,18 +80,16 @@ export default function YoutubeDashboardPage() {
     fetchYoutubeData();
   }, []);
 
-  // ★ 기본 메인 화면: 구독자 50만 이상 채널 중 5개 선별, 검색 시 전체 필터링
+  // ★ 기본 화면: 구독자 50만 이상 채널 우선 5개 추출, 검색 시 전체 필터링
   const displayedChannels = useMemo(() => {
     const q = search.trim().toLowerCase();
     
-    // 1. 검색어나 태그가 없을 경우: 구독자 50만 이상 채널 우선 5개 추출 (없으면 상위 5개)
     if (!q && selectedTag === '전체') {
       const over500k = channels.filter(c => (Number(c.subscriber_count) || 0) >= 500000);
       const targetPool = over500k.length > 0 ? over500k : channels;
       return { list: targetPool.slice(0, 5), isDefaultRecommend: true };
     }
 
-    // 2. 검색어 또는 태그가 있을 경우 필터링
     const filtered = channels.filter((item) => {
       const tags = Array.isArray(item.tags) ? item.tags.map(t => (t || '').toLowerCase()) : [];
       const matchesCat = selectedTag === '전체' || 
@@ -179,7 +186,7 @@ export default function YoutubeDashboardPage() {
         ) : (
           displayedChannels.list.map((channel) => {
             const cKey = String(channel.channel_id || '').trim().toLowerCase();
-            const vList = videosMap[cKey] || [];
+            const pList = postsMap[cKey] || [];
             const estPrice = Math.round(((Number(channel.subscriber_count) || 10000) * 0.05 + (Number(channel.total_view_count) || 50000) * 0.001) / 10000) * 10000;
 
             const fallbackThumbs = [
@@ -191,7 +198,7 @@ export default function YoutubeDashboardPage() {
 
             return (
               <div 
-                key={channel.channel_id}
+                key={channel.id || channel.channel_id}
                 className="bg-white rounded-2xl border border-slate-200 p-6 shadow-2xs hover:shadow-md transition space-y-4"
               >
                 <div className="flex items-center justify-between">
@@ -248,20 +255,20 @@ export default function YoutubeDashboardPage() {
                   </div>
                 </div>
 
-                {/* 최근 발행 영상 썸네일 피드 */}
+                {/* 최근 발행 영상 피드 */}
                 <div className="space-y-2">
                   <p className="text-[11px] font-bold text-slate-400">최근 발행 영상 콘텐츠</p>
                   <div className="grid grid-cols-4 gap-3">
                     {[0, 1, 2, 3].map((i) => {
-                      const v = vList[i];
-                      const thumb = v?.thumbnail_url || fallbackThumbs[i % fallbackThumbs.length];
-                      const title = v?.title || `${channel.name} 추천 하이라이트 영상 #${i+1}`;
+                      const p = pList[i];
+                      const thumb = p?.thumbnail_url || fallbackThumbs[i % fallbackThumbs.length];
+                      const title = p?.title || `${channel.name} 추천 하이라이트 영상 #${i+1}`;
                       return (
                         <div key={i} className="group relative block rounded-xl border border-slate-100 overflow-hidden bg-slate-100 aspect-video">
                           <img src={thumb} alt="" className="w-full h-full object-cover group-hover:scale-105 transition duration-300" referrerPolicy="no-referrer" />
                           <div className="absolute inset-0 bg-black/80 backdrop-blur-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-center items-center text-center p-3 text-white space-y-1">
                             <p className="text-[11px] font-bold line-clamp-2 px-1">{title}</p>
-                            <span className="text-[10px] text-rose-400 flex items-center gap-1"><Eye size={10} /> {(Number(v?.view_count) || 15000).toLocaleString()}회</span>
+                            <span className="text-[10px] text-rose-400 flex items-center gap-1"><Eye size={10} /> {(Number(p?.view_count) || 15000).toLocaleString()}회</span>
                           </div>
                         </div>
                       );
