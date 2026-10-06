@@ -39,13 +39,9 @@ export default function YoutubeDashboardPage() {
         if (cErr) console.error('influencers fetch error:', cErr);
         if (pErr) console.error('influencer_posts fetch error:', pErr);
 
-        if (cData && cData.length > 0) {
-          console.log('🔍 [실제 DB 채널 데이터 구조 확인]:', cData[0]);
-          setChannels(cData);
-        }
-
-        if (pData && pData.length > 0) {
-          console.log('🔍 [실제 DB 포스트 데이터 구조 확인]:', pData[0]);
+        if (cData) setChannels(cData);
+        
+        if (pData) {
           const map: Record<string, any[]> = {};
           pData.forEach((p: any) => {
             const keys = [
@@ -73,8 +69,9 @@ export default function YoutubeDashboardPage() {
     
     if (!q && selectedTag === '전체') {
       const sorted = [...channels].sort((a, b) => {
-        const subA = Number(a.subscriber_count ?? a.subscribers ?? a.fan_count ?? 0);
-        const subB = Number(b.subscriber_count ?? b.subscribers ?? b.fan_count ?? 0);
+        // 실제 스키마의 follwer_count 및 subscriber_count 매칭
+        const subA = Number(a.follwer_count ?? a.subscriber_count ?? a.subscribers ?? 0);
+        const subB = Number(b.follwer_count ?? b.subscriber_count ?? b.subscribers ?? 0);
         return subB - subA;
       });
       return { list: sorted.slice(0, 5), isDefaultRecommend: true };
@@ -177,20 +174,14 @@ export default function YoutubeDashboardPage() {
             const cidKey = String(channel.channel_id || '').trim().toLowerCase();
             const pList = postsMap[cidKey] || postsMap[idKey] || [];
 
-            // DB에 실제로 저장된 컬럼값들을 우선적으로 가져옴 (없을 경우 0으로 표기하여 누락 인지)
-            const subs = Number(channel.subscriber_count ?? channel.subscribers ?? channel.fan_count ?? 0);
-            
-            // 롱폼 평균 조회수 (DB 컬럼 매핑)
-            const longFormViews = Number(channel.avg_view_count ?? channel.average_view_count ?? channel.long_form_views ?? 0);
-            
-            // 숏폼 평균 조회수 (DB 컬럼 매핑)
-            const shortFormViews = Number(channel.short_form_views ?? channel.shorts_view_count ?? 0);
+            // ★ 공유해주신 정확한 DB 헤더 스키마 매핑
+            const subs = Number(channel.follwer_count ?? channel.subscriber_count ?? channel.subscribers ?? 0);
+            const longFormViews = Number(channel.avg_video_views ?? channel.avg_views ?? 0);
+            const shortFormViews = Number(channel.avg_shorts_views ?? 0);
+            const estPrice = Number(channel.estimated_video_cpv_price ?? channel.ad_price ?? 0);
 
-            // 광고 단가 (DB 컬럼 매핑)
-            const rawAdPrice = Number(channel.ad_price ?? channel.estimated_price ?? channel.price ?? 0);
-            const estPrice = rawAdPrice > 0 ? rawAdPrice : (subs > 0 ? Math.round(subs * 0.05 / 10000) * 10000 : 0);
-
-            const profileImg = channel.profile_img_url || channel.profile_image || '';
+            const profileImg = channel.profile_img_url || channel.profile_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150';
+            const tagsList = Array.isArray(channel.tags) ? channel.tags : (typeof channel.tags === 'string' ? channel.tags.split(',') : ['크리에이터']);
 
             return (
               <div 
@@ -199,26 +190,22 @@ export default function YoutubeDashboardPage() {
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3.5">
-                    {profileImg ? (
-                      <img 
-                        src={profileImg} 
-                        alt={channel.name} 
-                        referrerPolicy="no-referrer"
-                        className="w-14 h-14 rounded-full border border-slate-200 object-cover"
-                      />
-                    ) : (
-                      <div className="w-14 h-14 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-500">No Img</div>
-                    )}
+                    <img 
+                      src={profileImg} 
+                      alt={channel.name} 
+                      referrerPolicy="no-referrer"
+                      className="w-14 h-14 rounded-full border border-slate-200 object-cover"
+                    />
                     <div>
                       <div className="flex items-center gap-2">
                         <h3 className="text-base font-bold text-slate-900">{channel.name}</h3>
                         <span className="text-[10px] px-2 py-0.5 bg-red-100 text-red-700 font-extrabold rounded">YOUTUBER</span>
                       </div>
                       <p className="text-xs text-slate-400 mt-0.5">@{channel.handle || channel.channel_id}</p>
-                      <div className="flex gap-1.5 mt-2">
-                        {(Array.isArray(channel.tags) ? channel.tags : []).map((t: string, idx: number) => (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {tagsList.map((t: string, idx: number) => (
                           <span key={idx} className="text-[10px] font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-100">
-                            #{t}
+                            #{t.trim()}
                           </span>
                         ))}
                       </div>
@@ -227,7 +214,7 @@ export default function YoutubeDashboardPage() {
 
                   <div className="flex items-center gap-2">
                     <a
-                      href={`mailto:contact@findlist.co.kr?subject=[유튜브 협업문의] ${channel.name} 채널 광고 문의`}
+                      href={`mailto:${channel.contact_email || 'contact@findlist.co.kr'}?subject=[유튜브 협업문의] ${channel.name} 채널 광고 문의`}
                       className="flex items-center gap-1 px-4 py-2 bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 text-xs font-bold rounded-xl transition cursor-pointer"
                     >
                       <Mail size={13} /> 광고 문의
@@ -242,7 +229,7 @@ export default function YoutubeDashboardPage() {
                   </div>
                 </div>
 
-                {/* DB 실제 값 연동 영역 */}
+                {/* ★ 구독자수(follwer_count), 롱폼조회수(avg_video_views), 숏폼조회수(avg_shorts_views), 광고단가(estimated_video_cpv_price) */}
                 <div className="grid grid-cols-4 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100 text-xs">
                   <div>
                     <span className="text-slate-400">구독자 수</span>
@@ -271,7 +258,7 @@ export default function YoutubeDashboardPage() {
                   </div>
                 </div>
 
-                {/* 실제 influencer_posts 테이블의 썸네일 및 타이틀 연동 */}
+                {/* 최근 발행 영상 콘텐츠 (influencer_posts) */}
                 <div className="space-y-2">
                   <p className="text-[11px] font-bold text-slate-400">최근 발행 영상 콘텐츠</p>
                   {pList.length > 0 ? (
