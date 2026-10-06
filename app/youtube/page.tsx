@@ -30,19 +30,29 @@ export default function YoutubeDashboardPage() {
           .select('*')
           .limit(300);
 
-        // 발행일 기준 최신순 정렬
-        const { data: pData } = await supabase
-          .from('influencer_posts')
-          .select('*')
-          .order('published_at', { ascending: false })
-          .limit(5000);
+        // ★ Supabase 기본 1000개 행 제한을 우회하기 위해 다중 range로 포스트 데이터를 안전하게 모두 로드합니다.
+        let allPostsData: any[] = [];
+        let rangeStep = 1000;
+        for (let i = 0; i < 5; i++) {
+          const { data: chunk } = await supabase
+            .from('influencer_posts')
+            .select('*')
+            .order('published_at', { ascending: false })
+            .range(i * rangeStep, (i + 1) * rangeStep - 1);
+          
+          if (chunk && chunk.length > 0) {
+            allPostsData = allPostsData.concat(chunk);
+            if (chunk.length < rangeStep) break;
+          } else {
+            break;
+          }
+        }
 
         if (cData) setChannels(cData);
         
-        if (pData) {
+        if (allPostsData.length > 0) {
           const map: Record<string, any[]> = {};
-          pData.forEach((p: any) => {
-            // channel_id를 기준으로 정밀 매칭 맵 생성
+          allPostsData.forEach((p: any) => {
             const cid = String(p.channel_id || '').trim();
             if (!cid) return;
 
@@ -172,7 +182,6 @@ export default function YoutubeDashboardPage() {
           </div>
         ) : (
           displayedChannels.list.map((channel) => {
-            // ★ influencers 테이블의 channel_id를 정확히 사용하여 postsMap에서 최신 포스트 인출
             const cId = String(channel.channel_id || '').trim();
             const pList = postsMap[cId] || [];
 
@@ -261,7 +270,7 @@ export default function YoutubeDashboardPage() {
                   </div>
                 </div>
 
-                {/* 최근 발행 영상 콘텐츠 (channel_id 기반 정확한 매칭 출력) */}
+                {/* 최근 발행 영상 콘텐츠 */}
                 <div className="space-y-2">
                   <p className="text-[11px] font-bold text-slate-400">최근 발행 영상 콘텐츠</p>
                   {pList.length > 0 ? (
@@ -284,7 +293,7 @@ export default function YoutubeDashboardPage() {
                     </div>
                   ) : (
                     <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 text-center text-xs text-amber-700 font-semibold">
-                      해당 채널의 `influencer_posts` 데이터가 매칭되지 않았습니다. (Channel ID: {channel.channel_id})
+                      해당 채널의 `influencer_posts` 데이터가 아직 로드되지 않았습니다. (Channel ID: {channel.channel_id})
                     </div>
                   )}
                 </div>
