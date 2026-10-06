@@ -20,23 +20,17 @@ export default function YoutubeDashboardPage() {
   const [channels, setChannels] = useState<any[]>([]);
   const [postsMap, setPostsMap] = useState<Record<string, any[]>>({});
   const [loading, setLoading] = useState(false);
-  const [dbError, setDbError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchYoutubeData = async () => {
       setLoading(true);
-      setDbError(null);
       try {
-        // ★ 플랫폼 필터링에서 데이터가 누락되는 것을 막기 위해 전체 데이터를 우선 조회합니다.
         const { data: cData, error: cErr } = await supabase
           .from('influencers')
           .select('*')
-          .limit(100);
+          .limit(200);
 
-        if (cErr) {
-          setDbError(cErr.message);
-          console.error('influencers fetch error:', cErr);
-        }
+        if (cErr) console.error('influencers fetch error:', cErr);
 
         const { data: pData, error: pErr } = await supabase
           .from('influencer_posts')
@@ -46,7 +40,7 @@ export default function YoutubeDashboardPage() {
         if (pErr) console.error('influencer_posts fetch error:', pErr);
 
         if (cData) {
-          console.log('📦 [Supabase Raw Data Loaded]:', cData);
+          console.log('📦 [Loaded Raw Channel]:', cData[0]);
           setChannels(cData);
         }
         
@@ -66,8 +60,6 @@ export default function YoutubeDashboardPage() {
           });
           setPostsMap(map);
         }
-      } catch (err: any) {
-        setDbError(err?.message || '알 수 없는 DB 오류 발생');
       } finally {
         setLoading(false);
       }
@@ -78,18 +70,19 @@ export default function YoutubeDashboardPage() {
   const displayedChannels = useMemo(() => {
     const q = search.trim().toLowerCase();
     
-    // platform이 유튜브인 것만 필터링 (대소문자 무시) 또는 전체 데이터 활용
+    // platform이 youtube인 데이터 필터링 (대소문자 및 오타 방어)
     const youtubeChannels = channels.filter(c => {
       const p = String(c.platform || '').toLowerCase();
-      return p === 'youtube' || p.includes('tube') || !c.platform; // platform이 비어있어도 일단 포함
+      return p === 'youtube' || p.includes('tube') || !c.platform;
     });
 
     const targetList = youtubeChannels.length > 0 ? youtubeChannels : channels;
 
     if (!q && selectedTag === '전체') {
       const sorted = [...targetList].sort((a, b) => {
-        const subA = Number(a.follwer_count ?? a.subscriber_count ?? a.subscribers ?? 0);
-        const subB = Number(b.follwer_count ?? b.subscriber_count ?? b.subscribers ?? 0);
+        // follower_count 오타 수정 및 전체 가능한 키 검사
+        const subA = Number(a.follower_count ?? a.follwer_count ?? a.subscriber_count ?? a.subscribers ?? 0);
+        const subB = Number(b.follower_count ?? b.follwer_count ?? b.subscriber_count ?? b.subscribers ?? 0);
         return subB - subA;
       });
       return { list: sorted.slice(0, 5), isDefaultRecommend: true };
@@ -168,17 +161,11 @@ export default function YoutubeDashboardPage() {
       </div>
 
       <div className="max-w-5xl mx-auto w-full p-8 space-y-4">
-        {dbError && (
-          <div className="p-4 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl font-bold">
-            🚨 Supabase 에러 발생: {dbError}
-          </div>
-        )}
-
         {displayedChannels.isDefaultRecommend && (
           <div className="bg-gradient-to-r from-red-50 to-rose-50 border border-red-200 p-4 rounded-2xl flex items-center justify-between text-xs text-red-900 shadow-2xs">
             <div className="flex items-center gap-2 font-bold">
               <Sparkles size={16} className="text-red-600" />
-              <span>실시간 추천 대형 유튜버 파워 채널 베스트 5 (총 로드된 채널: {channels.length}개)</span>
+              <span>실시간 추천 대형 유튜버 파워 채널 베스트 5</span>
             </div>
             <span className="text-[11px] text-red-600 font-semibold">검색창에서 원하는 크리에이터를 검색해 보세요!</span>
           </div>
@@ -192,7 +179,7 @@ export default function YoutubeDashboardPage() {
           <div className="p-20 text-center text-sm text-slate-400">유튜버 데이터를 불러오는 중...</div>
         ) : displayedChannels.list.length === 0 ? (
           <div className="p-20 text-center text-sm text-slate-400 bg-white rounded-2xl border border-slate-200">
-            데이터베이스에 일치하는 크리에이터가 없습니다. (현재 총 로드된 데이터: {channels.length}건)
+            데이터베이스에 일치하는 크리에이터가 없습니다.
           </div>
         ) : (
           displayedChannels.list.map((channel) => {
@@ -200,8 +187,8 @@ export default function YoutubeDashboardPage() {
             const cidKey = String(channel.channel_id || '').trim().toLowerCase();
             const pList = postsMap[cidKey] || postsMap[idKey] || [];
 
-            // ★ 공유해주신 스키마 헤더 정확한 매핑
-            const subs = Number(channel.follwer_count ?? channel.subscriber_count ?? channel.subscribers ?? 0);
+            // ★ 올바른 필드명 매핑 (follower_count 오타 수정 적용)
+            const subs = Number(channel.follower_count ?? channel.follwer_count ?? channel.subscriber_count ?? channel.subscribers ?? 0);
             const longFormViews = Number(channel.avg_video_views ?? channel.avg_views ?? 0);
             const shortFormViews = Number(channel.avg_shorts_views ?? 0);
             const estPrice = Number(channel.estimated_video_cpv_price ?? channel.ad_price ?? 0);
@@ -260,15 +247,15 @@ export default function YoutubeDashboardPage() {
                 {/* 지표 영역 */}
                 <div className="grid grid-cols-4 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100 text-xs">
                   <div>
-                    <span className="text-slate-400">구독자 수 (follwer_count)</span>
+                    <span className="text-slate-400">구독자 수</span>
                     <p className="text-sm font-black text-slate-900 mt-0.5">{subs > 0 ? `${subs.toLocaleString()}명` : '0명'}</p>
                   </div>
                   <div>
-                    <span className="text-slate-400">평균 조회수 (avg_video_views)</span>
+                    <span className="text-slate-400">평균 조회수 (롱폼)</span>
                     <p className="text-sm font-black text-slate-900 mt-0.5">{longFormViews > 0 ? `${longFormViews.toLocaleString()}회` : '0회'}</p>
                   </div>
                   <div>
-                    <span className="text-slate-400">평균 조회수 (avg_shorts_views)</span>
+                    <span className="text-slate-400">평균 조회수 (숏폼)</span>
                     <p className="text-sm font-black text-red-600 mt-0.5">{shortFormViews > 0 ? `${shortFormViews.toLocaleString()}회` : '0회'}</p>
                   </div>
                   <div>
@@ -284,13 +271,6 @@ export default function YoutubeDashboardPage() {
                       </div>
                     )}
                   </div>
-                </div>
-
-                {/* DB Raw Data 디버깅 박스 (값이 안나올 때 원인 파악용) */}
-                <div className="p-3 bg-amber-50/50 rounded-lg border border-amber-100 text-[11px] text-amber-900 space-y-1">
-                  <p className="font-bold flex items-center gap-1">🛠️ [DB 실제 저장 데이터 디버그 뷰]</p>
-                  <p>• 채널 ID: {channel.channel_id} | 고유 ID: {channel.id}</p>
-                  <p>• DB Raw 값 → follwer_count: <b>{String(channel.follwer_count)}</b> | avg_video_views: <b>{String(channel.avg_video_views)}</b> | avg_shorts_views: <b>{String(channel.avg_shorts_views)}</b></p>
                 </div>
 
                 <div className="space-y-2">
