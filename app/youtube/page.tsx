@@ -18,45 +18,34 @@ export default function YoutubeDashboardPage() {
   const [selectedTag, setSelectedTag] = useState('전체');
   
   const [channels, setChannels] = useState<any[]>([]);
-  // 각 채널별 최신 포스트를 개별적으로 담아두는 상태
-  const [channelPosts, setChannelPosts] = useState<Record<string, any[]>>({});
+  const [postsMap, setPostsMap] = useState<Record<string, any[]>>({});
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const fetchYoutubeData = async () => {
       setLoading(true);
       try {
-        // 1. 채널 목록 로드
-        const { data: cData } = await supabase
-          .from('influencers')
-          .select('*')
-          .limit(300);
+        // 1. 채널 목록과 포스트 데이터를 각각 단 한 번의 쿼리로 병렬 로드하여 속도 극대화
+        const [cRes, pRes] = await Promise.all([
+          supabase.from('influencers').select('*').limit(300),
+          supabase.from('influencer_posts').select('*').order('published_at', { ascending: false }).limit(2000)
+        ]);
 
-        if (cData && cData.length > 0) {
-          setChannels(cData);
+        if (cRes.data) setChannels(cRes.data);
 
-          // 2. 각 채널별로 Supabase에 직접 channel_id를 조건(=eq)으로 걸어 최신 영상 4개씩 즉시 조회
-          const postsMapping: Record<string, any[]> = {};
-          
-          await Promise.all(
-            cData.map(async (channel) => {
-              const cid = String(channel.channel_id || '').trim();
-              if (!cid) return;
-
-              const { data: pData } = await supabase
-                .from('influencer_posts')
-                .select('*')
-                .eq('channel_id', cid)
-                .order('published_at', { ascending: false })
-                .limit(4);
-
-              if (pData && pData.length > 0) {
-                postsMapping[cid] = pData;
-              }
-            })
-          );
-
-          setChannelPosts(postsMapping);
+        // 2. 메모리 상에서 channel_id 기준으로 포스트 맵을 단 한 번만 생성
+        if (pRes.data) {
+          const map: Record<string, any[]> = {};
+          pRes.data.forEach((p: any) => {
+            const cid = String(p.channel_id || '').trim();
+            if (!cid) return;
+            if (!map[cid]) map[cid] = [];
+            // 채널당 최대 4개까지만 보관하여 메모리 및 렌더링 최적화
+            if (map[cid].length < 4) {
+              map[cid].push(p);
+            }
+          });
+          setPostsMap(map);
         }
       } finally {
         setLoading(false);
@@ -180,7 +169,7 @@ export default function YoutubeDashboardPage() {
         ) : (
           displayedChannels.list.map((channel) => {
             const cId = String(channel.channel_id || '').trim();
-            const pList = channelPosts[cId] || [];
+            const pList = postsMap[cId] || [];
 
             const subs = Number(channel.follower_count ?? channel.follwer_count ?? channel.subscriber_count ?? channel.subscribers ?? 0);
             const longFormViews = Number(channel.avg_video_views ?? channel.avg_views ?? 0);
@@ -195,25 +184,27 @@ export default function YoutubeDashboardPage() {
                 key={channel.id || channel.channel_id}
                 className="bg-white rounded-2xl border border-slate-200 p-6 shadow-2xs hover:shadow-md transition space-y-4"
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3.5">
+                {/* 상단 프로필 및 버튼 영역 (해시태그 줄바꿈 및 버튼 고정 레이아웃 적용) */}
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-3.5 min-w-0 flex-1">
                     <img 
                       src={profileImg} 
                       alt={channel.name} 
                       referrerPolicy="no-referrer"
-                      className="w-14 h-14 rounded-full border border-slate-200 object-cover"
+                      className="w-14 h-14 rounded-full border border-slate-200 object-cover flex-shrink-0"
                     />
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <h3 className="text-base font-bold text-slate-900">{channel.name || '이름 없음'}</h3>
-                        <span className="text-[10px] px-2 py-0.5 bg-red-100 text-red-700 font-extrabold rounded">
+                        <h3 className="text-base font-bold text-slate-900 truncate">{channel.name || '이름 없음'}</h3>
+                        <span className="text-[10px] px-2 py-0.5 bg-red-100 text-red-700 font-extrabold rounded flex-shrink-0">
                           {channel.platform || 'YOUTUBER'}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-400 mt-0.5">@{channel.handle || channel.channel_id}</p>
-                      <div className="flex flex-wrap gap-1.5 mt-2">
+                      <p className="text-xs text-slate-400 mt-0.5 truncate">@{channel.handle || channel.channel_id}</p>
+                      
+                      <div className="flex flex-wrap gap-1.5 mt-2 max-h-20 overflow-y-auto">
                         {tagsList.map((t: string, i: number) => (
-                          <span key={i} className="text-[10px] font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-100">
+                          <span key={i} className="text-[10px] font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-100 whitespace-nowrap">
                             #{String(t).trim()}
                           </span>
                         ))}
@@ -221,17 +212,17 @@ export default function YoutubeDashboardPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-shrink-0">
                     <a
                       href={`mailto:${channel.contact_email || 'contact@findlist.co.kr'}?subject=[유튜브 협업문의] ${channel.name} 채널 광고 문의`}
-                      className="flex items-center gap-1 px-4 py-2 bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 text-xs font-bold rounded-xl transition cursor-pointer"
+                      className="flex items-center gap-1 px-4 py-2 bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 text-xs font-bold rounded-xl transition cursor-pointer whitespace-nowrap"
                     >
                       <Mail size={13} /> 광고 문의
                     </a>
                     <button
                       type="button"
                       onClick={() => handleOpenDetail(channel)}
-                      className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition shadow-xs cursor-pointer"
+                      className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition shadow-xs cursor-pointer whitespace-nowrap"
                     >
                       채널 상세 분석 <ChevronRight size={14} />
                     </button>
@@ -267,7 +258,7 @@ export default function YoutubeDashboardPage() {
                   </div>
                 </div>
 
-                {/* 최근 발행 영상 콘텐츠 (Supabase에서 직접 최신순 조회된 결과 출력) */}
+                {/* 최근 발행 영상 콘텐츠 */}
                 <div className="space-y-2">
                   <p className="text-[11px] font-bold text-slate-400">최근 발행 영상 콘텐츠</p>
                   {pList.length > 0 ? (
