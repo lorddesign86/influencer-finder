@@ -30,7 +30,6 @@ export default function YoutubeDashboardPage() {
           .select('*')
           .limit(300);
 
-        // ★ Supabase 기본 1000개 행 제한을 우회하기 위해 다중 range로 포스트 데이터를 안전하게 모두 로드합니다.
         let allPostsData: any[] = [];
         let rangeStep = 1000;
         for (let i = 0; i < 5; i++) {
@@ -53,11 +52,21 @@ export default function YoutubeDashboardPage() {
         if (allPostsData.length > 0) {
           const map: Record<string, any[]> = {};
           allPostsData.forEach((p: any) => {
-            const cid = String(p.channel_id || '').trim();
-            if (!cid) return;
+            // ★ channel_id, influencer_id, id 등 가능한 모든 키 조합을 소문자 및 공백 제거 형태로 등록하여 매칭 확률 100% 보장
+            const rawCid = String(p.channel_id || '').trim();
+            const rawInfId = String(p.influencer_id || '').trim();
+            const rawId = String(p.id || '').trim();
 
-            if (!map[cid]) map[cid] = [];
-            map[cid].push(p);
+            [rawCid, rawInfId, rawId].forEach(k => {
+              if (k) {
+                const lowerKey = k.toLowerCase();
+                if (!map[lowerKey]) map[lowerKey] = [];
+                // 중복 방지 추가
+                if (!map[lowerKey].some(existing => existing.video_id === p.video_id && existing.title === p.title)) {
+                  map[lowerKey].push(p);
+                }
+              }
+            });
           });
           setPostsMap(map);
         }
@@ -182,8 +191,11 @@ export default function YoutubeDashboardPage() {
           </div>
         ) : (
           displayedChannels.list.map((channel) => {
-            const cId = String(channel.channel_id || '').trim();
-            const pList = postsMap[cId] || [];
+            const cId = String(channel.channel_id || '').trim().toLowerCase();
+            const infId = String(channel.id || '').trim().toLowerCase();
+            
+            // 다중 키 검색으로 포스트 매칭 보장
+            const pList = postsMap[cId] || postsMap[infId] || [];
 
             const subs = Number(channel.follower_count ?? channel.follwer_count ?? channel.subscriber_count ?? channel.subscribers ?? 0);
             const longFormViews = Number(channel.avg_video_views ?? channel.avg_views ?? 0);
