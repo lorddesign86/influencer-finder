@@ -40,19 +40,18 @@ export default function YoutubeDashboardPage() {
         if (pErr) console.error('influencer_posts fetch error:', pErr);
 
         if (cData && cData.length > 0) {
-          console.log('🔥 [DB Loaded Influencers]:', cData[0]); // 실제 데이터 구조 확인용 콘솔
+          console.log('🔍 [실제 DB 채널 데이터 구조 확인]:', cData[0]);
           setChannels(cData);
         }
 
         if (pData && pData.length > 0) {
-          console.log('🔥 [DB Loaded Posts]:', pData[0]); // 실제 포스트 구조 확인용 콘솔
+          console.log('🔍 [실제 DB 포스트 데이터 구조 확인]:', pData[0]);
           const map: Record<string, any[]> = {};
           pData.forEach((p: any) => {
             const keys = [
               String(p.channel_id || '').trim().toLowerCase(),
               String(p.influencer_id || '').trim().toLowerCase(),
-              String(p.id || '').trim().toLowerCase(),
-              String(p.blog_id || '').trim().toLowerCase()
+              String(p.id || '').trim().toLowerCase()
             ].filter(Boolean);
 
             keys.forEach(k => {
@@ -74,8 +73,8 @@ export default function YoutubeDashboardPage() {
     
     if (!q && selectedTag === '전체') {
       const sorted = [...channels].sort((a, b) => {
-        const subA = Number(a.subscriber_count ?? a.subscribers ?? a.fan_count ?? a.follower_count ?? 0);
-        const subB = Number(b.subscriber_count ?? b.subscribers ?? b.fan_count ?? b.follower_count ?? 0);
+        const subA = Number(a.subscriber_count ?? a.subscribers ?? a.fan_count ?? 0);
+        const subB = Number(b.subscriber_count ?? b.subscribers ?? b.fan_count ?? 0);
         return subB - subA;
       });
       return { list: sorted.slice(0, 5), isDefaultRecommend: true };
@@ -117,7 +116,7 @@ export default function YoutubeDashboardPage() {
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
             <input 
               type="text" 
-              placeholder="유튜버 이름이나 키워드를 검색하세요 (예: 브이로그, 맛집, 여행...)" 
+              placeholder="유튜버 이름이나 키워드를 검색하세요 (예: 보검TV, 브이로그...)" 
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-12 pr-4 py-3 border border-slate-200 rounded-full text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500 transition shadow-inner"
@@ -178,16 +177,20 @@ export default function YoutubeDashboardPage() {
             const cidKey = String(channel.channel_id || '').trim().toLowerCase();
             const pList = postsMap[cidKey] || postsMap[idKey] || [];
 
-            // DB 컬럼명 다양한 변형 모두 대응 (구독자, 조회수, 영상수 등)
-            const subs = Number(channel.subscriber_count ?? channel.subscribers ?? channel.fan_count ?? channel.follower_count ?? 0);
-            const totalViews = Number(channel.total_view_count ?? channel.view_count ?? channel.views ?? 0);
-            const vCount = Number(channel.video_count ?? channel.videos_count ?? channel.videos ?? 0);
+            // DB에 실제로 저장된 컬럼값들을 우선적으로 가져옴 (없을 경우 0으로 표기하여 누락 인지)
+            const subs = Number(channel.subscriber_count ?? channel.subscribers ?? channel.fan_count ?? 0);
+            
+            // 롱폼 평균 조회수 (DB 컬럼 매핑)
+            const longFormViews = Number(channel.avg_view_count ?? channel.average_view_count ?? channel.long_form_views ?? 0);
+            
+            // 숏폼 평균 조회수 (DB 컬럼 매핑)
+            const shortFormViews = Number(channel.short_form_views ?? channel.shorts_view_count ?? 0);
 
-            const longFormAvgViews = vCount > 0 ? Math.round(totalViews / vCount) : (totalViews > 0 ? Math.round(totalViews / 50) : 0);
-            const shortFormAvgViews = longFormAvgViews > 0 ? Math.round(longFormAvgViews * 1.5) : 0;
-            const estPrice = subs > 0 ? Math.round((subs * 0.05 + longFormAvgViews * 0.002) / 10000) * 10000 : 0;
+            // 광고 단가 (DB 컬럼 매핑)
+            const rawAdPrice = Number(channel.ad_price ?? channel.estimated_price ?? channel.price ?? 0);
+            const estPrice = rawAdPrice > 0 ? rawAdPrice : (subs > 0 ? Math.round(subs * 0.05 / 10000) * 10000 : 0);
 
-            const profileImg = channel.profile_img_url || channel.profile_image || channel.img_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150';
+            const profileImg = channel.profile_img_url || channel.profile_image || '';
 
             return (
               <div 
@@ -196,12 +199,16 @@ export default function YoutubeDashboardPage() {
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3.5">
-                    <img 
-                      src={profileImg} 
-                      alt={channel.name} 
-                      referrerPolicy="no-referrer"
-                      className="w-14 h-14 rounded-full border border-slate-200 object-cover"
-                    />
+                    {profileImg ? (
+                      <img 
+                        src={profileImg} 
+                        alt={channel.name} 
+                        referrerPolicy="no-referrer"
+                        className="w-14 h-14 rounded-full border border-slate-200 object-cover"
+                      />
+                    ) : (
+                      <div className="w-14 h-14 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-500">No Img</div>
+                    )}
                     <div>
                       <div className="flex items-center gap-2">
                         <h3 className="text-base font-bold text-slate-900">{channel.name}</h3>
@@ -209,7 +216,7 @@ export default function YoutubeDashboardPage() {
                       </div>
                       <p className="text-xs text-slate-400 mt-0.5">@{channel.handle || channel.channel_id}</p>
                       <div className="flex gap-1.5 mt-2">
-                        {(Array.isArray(channel.tags) ? channel.tags : ['크리에이터']).map((t: string, idx: number) => (
+                        {(Array.isArray(channel.tags) ? channel.tags : []).map((t: string, idx: number) => (
                           <span key={idx} className="text-[10px] font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-100">
                             #{t}
                           </span>
@@ -235,40 +242,24 @@ export default function YoutubeDashboardPage() {
                   </div>
                 </div>
 
-                {/* 지표 영역: 구독자수, 평균 조회수(롱폼), 평균 조회수(숏폼), 광고단가(PRO) */}
+                {/* DB 실제 값 연동 영역 */}
                 <div className="grid grid-cols-4 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100 text-xs">
                   <div>
                     <span className="text-slate-400">구독자 수</span>
-                    {subs > 0 ? (
-                      <p className="text-sm font-black text-slate-900 mt-0.5">{subs.toLocaleString()}명</p>
-                    ) : (
-                      <p className="text-xs font-bold text-amber-600 mt-0.5">데이터 수집 필요</p>
-                    )}
+                    <p className="text-sm font-black text-slate-900 mt-0.5">{subs > 0 ? `${subs.toLocaleString()}명` : '데이터 없음'}</p>
                   </div>
                   <div>
                     <span className="text-slate-400">평균 조회수 (롱폼)</span>
-                    {longFormAvgViews > 0 ? (
-                      <p className="text-sm font-black text-slate-900 mt-0.5">{longFormAvgViews.toLocaleString()}회</p>
-                    ) : (
-                      <p className="text-xs font-bold text-amber-600 mt-0.5">데이터 수집 필요</p>
-                    )}
+                    <p className="text-sm font-black text-slate-900 mt-0.5">{longFormViews > 0 ? `${longFormViews.toLocaleString()}회` : '데이터 없음'}</p>
                   </div>
                   <div>
                     <span className="text-slate-400">평균 조회수 (숏폼)</span>
-                    {shortFormAvgViews > 0 ? (
-                      <p className="text-sm font-black text-red-600 mt-0.5">{shortFormAvgViews.toLocaleString()}회</p>
-                    ) : (
-                      <p className="text-xs font-bold text-amber-600 mt-0.5">데이터 수집 필요</p>
-                    )}
+                    <p className="text-sm font-black text-red-600 mt-0.5">{shortFormViews > 0 ? `${shortFormViews.toLocaleString()}회` : '데이터 없음'}</p>
                   </div>
                   <div>
                     <span className="text-slate-400">광고 단가 (PRO)</span>
                     {isProUser ? (
-                      estPrice > 0 ? (
-                        <p className="text-sm font-black text-rose-600 mt-0.5">{estPrice.toLocaleString()}원~</p>
-                      ) : (
-                        <p className="text-xs font-bold text-amber-600 mt-0.5">데이터 부족</p>
-                      )
+                      <p className="text-sm font-black text-rose-600 mt-0.5">{estPrice > 0 ? `${estPrice.toLocaleString()}원~` : '데이터 없음'}</p>
                     ) : (
                       <div className="relative mt-0.5">
                         <span className="filter blur-[4px] select-none text-slate-400 font-bold">1,500,000원</span>
@@ -280,22 +271,26 @@ export default function YoutubeDashboardPage() {
                   </div>
                 </div>
 
-                {/* 최근 발행 영상 콘텐츠 (썸네일 컬럼 다중 대응) */}
+                {/* 실제 influencer_posts 테이블의 썸네일 및 타이틀 연동 */}
                 <div className="space-y-2">
                   <p className="text-[11px] font-bold text-slate-400">최근 발행 영상 콘텐츠</p>
                   {pList.length > 0 ? (
                     <div className="grid grid-cols-4 gap-3">
                       {pList.slice(0, 4).map((p: any, i: number) => {
-                        const thumb = p.thumbnail_url || p.thumbnail || p.image_url || p.img_url || 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=300';
-                        const title = p.title || p.post_title || `${channel.name} 추천 하이라이트 영상 #${i+1}`;
-                        const vViews = Number(p.view_count || p.views || longFormAvgViews);
+                        const thumb = p.thumbnail_url || p.thumbnail || p.image_url || '';
+                        const title = p.title || p.post_title || '영상 제목 없음';
+                        const pViews = Number(p.view_count || p.views || 0);
 
                         return (
                           <div key={i} className="group relative block rounded-xl border border-slate-100 overflow-hidden bg-slate-100 aspect-video">
-                            <img src={thumb} alt="" className="w-full h-full object-cover group-hover:scale-105 transition duration-300" referrerPolicy="no-referrer" />
+                            {thumb ? (
+                              <img src={thumb} alt="" className="w-full h-full object-cover group-hover:scale-105 transition duration-300" referrerPolicy="no-referrer" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-400 bg-slate-200">썸네일 없음</div>
+                            )}
                             <div className="absolute inset-0 bg-black/80 backdrop-blur-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-center items-center text-center p-3 text-white space-y-1">
                               <p className="text-[11px] font-bold line-clamp-2 px-1">{title}</p>
-                              <span className="text-[10px] text-rose-400 flex items-center gap-1"><Eye size={10} /> {vViews.toLocaleString()}회</span>
+                              <span className="text-[10px] text-rose-400 flex items-center gap-1"><Eye size={10} /> {pViews > 0 ? `${pViews.toLocaleString()}회` : '조회수 없음'}</span>
                             </div>
                           </div>
                         );
@@ -303,7 +298,7 @@ export default function YoutubeDashboardPage() {
                     </div>
                   ) : (
                     <div className="p-6 bg-slate-50 rounded-xl border border-slate-100 text-center text-xs text-amber-700 font-semibold flex items-center justify-center gap-1.5">
-                      <AlertTriangle size={14} /> 해당 채널의 `influencer_posts` 영상 데이터가 아직 수집되지 않았습니다.
+                      <AlertTriangle size={14} /> `influencer_posts` 테이블에 해당 채널의 영상 데이터가 매칭되지 않았습니다.
                     </div>
                   )}
                 </div>
