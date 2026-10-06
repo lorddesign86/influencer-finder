@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { 
-  ArrowLeft, Mail, Eye, ThumbsUp, Calendar, Lock, PlaySquare, Users, BarChart2, DollarSign, Activity 
+  ArrowLeft, Mail, Eye, Calendar, Lock, PlaySquare, Users, BarChart2, DollarSign, Activity 
 } from 'lucide-react';
 
 export default function YoutubeDetailDashboard() {
@@ -24,14 +24,14 @@ export default function YoutubeDetailDashboard() {
     const fetchDetail = async () => {
       setLoading(true);
       try {
-        // 1. channel_id로 먼저 조회 시도
+        // 1. channel_id로 채널 데이터 조회 시도
         let { data: cData } = await supabase
           .from('influencers')
           .select('*')
           .eq('channel_id', rawId)
           .single();
 
-        // 2. 데이터가 없으면 고유 id(숫자 또는 문자열)로 재조회
+        // 2. 안되면 고유 id로 재조회
         if (!cData) {
           const { data: cDataById } = await supabase
             .from('influencers')
@@ -43,18 +43,20 @@ export default function YoutubeDetailDashboard() {
 
         if (cData) {
           setChannel(cData);
-          const lookupKey = String(cData.channel_id || cData.id).trim().toLowerCase();
+          const channelIdVal = String(cData.channel_id || '').trim();
 
-          // 관련 포스트/영상 조회
-          const { data: vData } = await supabase
-            .from('influencer_posts')
-            .select('*');
+          // 3. 해당 채널의 정확한 channel_id로 influencer_posts 테이블에서 최신 영상 리스트 직접 조회
+          if (channelIdVal) {
+            const { data: vData } = await supabase
+              .from('influencer_posts')
+              .select('*')
+              .eq('channel_id', channelIdVal)
+              .order('published_at', { ascending: false })
+              .limit(50);
 
-          if (vData) {
-            const matchedVideos = vData.filter((v: any) => 
-              String(v.channel_id || v.influencer_id || '').trim().toLowerCase() === lookupKey
-            );
-            setVideos(matchedVideos);
+            if (vData && vData.length > 0) {
+              setVideos(vData);
+            }
           }
         }
       } catch (err) {
@@ -69,13 +71,12 @@ export default function YoutubeDetailDashboard() {
   if (loading) return <div className="h-screen flex items-center justify-center text-sm text-slate-400 bg-[#f8f9fa]">유튜브 크리에이터 분석 리포트 로딩 중...</div>;
   if (!channel) return <div className="h-screen flex items-center justify-center text-sm text-slate-400 bg-[#f8f9fa]">해당 채널 정보를 찾을 수 없습니다.</div>;
 
-  const subs = Number(channel.subscriber_count ?? channel.subscribers ?? 50000);
-  const totalViews = Number(channel.total_view_count ?? channel.view_count ?? 200000);
-  const vCount = Number(channel.video_count ?? channel.videos_count ?? 50);
-
-  const avgViews = vCount > 0 ? Math.round(totalViews / vCount) : 15000;
-  const estAdPrice = Math.round((subs * 0.05 + avgViews * 0.002) / 10000) * 10000;
-  const monthlyRevenue = Math.round(estAdPrice * 1.5 / 10000) * 10000;
+  // ★ 실제 DB 컬럼 매칭 (follower_count, avg_video_views, estimated_video_cpv_price 등)
+  const subs = Number(channel.follower_count ?? channel.follwer_count ?? channel.subscriber_count ?? channel.subscribers ?? 0);
+  const longFormViews = Number(channel.avg_video_views ?? channel.avg_views ?? 0);
+  const shortFormViews = Number(channel.avg_shorts_views ?? 0);
+  const estPrice = Number(channel.estimated_video_cpv_price ?? channel.ad_price ?? 0);
+  const totalVideoCount = Number(channel.total_video_count ?? videos.length ?? 0);
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[#f8f9fa] overflow-y-auto text-slate-800">
@@ -98,7 +99,7 @@ export default function YoutubeDetailDashboard() {
             {isProUser ? '👑 PRO 모드 활성화됨' : '🔓 무료 회원 (PRO 체험하기)'}
           </button>
           <a 
-            href={`mailto:contact@findlist.co.kr?subject=[유튜브 협업문의] ${channel.name}`}
+            href={`mailto:${channel.contact_email || 'contact@findlist.co.kr'}?subject=[유튜브 협업문의] ${channel.name}`}
             className="flex items-center gap-1.5 text-xs font-bold px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 transition shadow-sm cursor-pointer"
           >
             <Mail size={14} /> 채널 협업 문의
@@ -110,7 +111,7 @@ export default function YoutubeDetailDashboard() {
         <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div className="flex items-center gap-4">
             <img 
-              src={channel.profile_img_url || channel.profile_image || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'} 
+              src={channel.profile_img_url || channel.profile_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'} 
               alt={channel.name} 
               referrerPolicy="no-referrer"
               className="w-20 h-20 rounded-2xl object-cover border-2 border-slate-100 shadow-inner"
@@ -124,7 +125,7 @@ export default function YoutubeDetailDashboard() {
               <div className="flex flex-wrap gap-1.5 pt-1">
                 {(Array.isArray(channel.tags) ? channel.tags : ['크리에이터']).map((t: string, i: number) => (
                   <span key={i} className="text-[11px] font-semibold text-rose-700 bg-rose-50 px-2.5 py-0.5 rounded-full border border-rose-100">
-                    #{t}
+                    #{t.trim()}
                   </span>
                 ))}
               </div>
@@ -166,19 +167,19 @@ export default function YoutubeDetailDashboard() {
             <div className="grid grid-cols-4 gap-4">
               <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-2xs space-y-1">
                 <span className="text-xs font-bold text-slate-400">구독자 수</span>
-                <p className="text-2xl font-black text-slate-900">{subs.toLocaleString()}명</p>
+                <p className="text-2xl font-black text-slate-900">{subs > 0 ? `${subs.toLocaleString()}명` : '0명'}</p>
               </div>
               <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-2xs space-y-1">
                 <span className="text-xs font-bold text-slate-400">영상당 평균 조회수</span>
-                <p className="text-2xl font-black text-red-600">{avgViews.toLocaleString()}회</p>
+                <p className="text-2xl font-black text-red-600">{longFormViews > 0 ? `${longFormViews.toLocaleString()}회` : '0회'}</p>
               </div>
               <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-2xs space-y-1">
                 <span className="text-xs font-bold text-slate-400">총 조회수</span>
-                <p className="text-2xl font-black text-slate-900">{totalViews.toLocaleString()}회</p>
+                <p className="text-2xl font-black text-slate-900">{(longFormViews * 50).toLocaleString()}회</p>
               </div>
               <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-2xs space-y-1">
                 <span className="text-xs font-bold text-slate-400">총 누적 영상 수</span>
-                <p className="text-2xl font-black text-slate-900">{vCount.toLocaleString()}개</p>
+                <p className="text-2xl font-black text-slate-900">{totalVideoCount > 0 ? `${totalVideoCount}개` : `${videos.length}개`}</p>
               </div>
             </div>
           </div>
@@ -186,17 +187,17 @@ export default function YoutubeDetailDashboard() {
 
         {activeTab === 'video' && (
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-2xs space-y-4">
-            <h3 className="text-sm font-bold text-slate-800">최근 발행 유튜브 영상 피드</h3>
+            <h3 className="text-sm font-bold text-slate-800">최근 발행 유튜브 영상 피드 ({videos.length}개)</h3>
             <div className="space-y-3">
               {videos.length > 0 ? videos.map((v, i) => (
                 <div key={i} className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex gap-4 items-center">
-                  <img src={v.thumbnail_url || 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=300'} alt="" className="w-32 h-20 rounded-xl object-cover bg-slate-200 flex-shrink-0" referrerPolicy="no-referrer" />
+                  <img src={v.thumbnail_url || v.thumbnail || 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=300'} alt="" className="w-32 h-20 rounded-xl object-cover bg-slate-200 flex-shrink-0" referrerPolicy="no-referrer" />
                   <div className="min-w-0 flex-1 space-y-1">
-                    <span className="text-[10px] text-slate-400"><Calendar size={10} className="inline mr-1" />{v.published_at || '2026.10.04'}</span>
+                    <span className="text-[10px] text-slate-400"><Calendar size={10} className="inline mr-1" />{v.published_at ? new Date(v.published_at).toLocaleDateString() : '최신 발행'}</span>
                     <h4 className="text-xs font-bold text-slate-900 truncate">{v.title}</h4>
                   </div>
                   <div className="flex items-center gap-4 text-xs px-4 py-3 bg-white rounded-xl border border-slate-100">
-                    <span className="text-slate-700 font-bold flex items-center gap-1"><Eye size={14} /> {(Number(v.view_count) || avgViews).toLocaleString()}</span>
+                    <span className="text-slate-700 font-bold flex items-center gap-1"><Eye size={14} /> {(Number(v.view_count || v.views) || longFormViews).toLocaleString()}</span>
                   </div>
                 </div>
               )) : (
@@ -240,7 +241,7 @@ export default function YoutubeDetailDashboard() {
                 <div className="p-6 bg-rose-50 rounded-2xl border border-rose-100 flex justify-between items-center">
                   <div>
                     <span className="text-xs font-bold text-rose-600">추정 월간 조회수 기반 애드센스 수익</span>
-                    <p className="text-3xl font-black text-slate-900 mt-1">{monthlyRevenue.toLocaleString()}원 / 월</p>
+                    <p className="text-3xl font-black text-slate-900 mt-1">{(longFormViews * 30).toLocaleString()}원 / 월</p>
                   </div>
                   <span className="text-xs text-rose-700 font-bold bg-white px-4 py-2 rounded-xl border border-rose-200">상위 크리에이터 수익군</span>
                 </div>
@@ -259,11 +260,11 @@ export default function YoutubeDetailDashboard() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="p-6 rounded-2xl bg-slate-50 border border-slate-100 space-y-2">
                     <span className="text-xs font-bold text-slate-400">브랜디드 영상 제작 단가</span>
-                    <p className="text-2xl font-black text-red-600">{(estAdPrice * 3).toLocaleString()}원 ~</p>
+                    <p className="text-2xl font-black text-red-600">{(estPrice > 0 ? estPrice * 3 : subs * 0.05).toLocaleString()}원 ~</p>
                   </div>
                   <div className="p-6 rounded-2xl bg-slate-50 border border-slate-100 space-y-2">
                     <span className="text-xs font-bold text-slate-400">유튜브 쇼츠 / PPL 단가</span>
-                    <p className="text-2xl font-black text-slate-900">{estAdPrice.toLocaleString()}원 ~</p>
+                    <p className="text-2xl font-black text-slate-900">{(estPrice > 0 ? estPrice : subs * 0.02).toLocaleString()}원 ~</p>
                   </div>
                 </div>
               </div>
