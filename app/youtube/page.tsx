@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { 
-  Search, Tag, ChevronRight, Eye, Lock, Sparkles, Mail, AlertTriangle 
+  Search, Tag, ChevronRight, Eye, Lock, Sparkles, Mail 
 } from 'lucide-react';
 
 const YOUTUBE_CATEGORIES = [
@@ -30,23 +30,24 @@ export default function YoutubeDashboardPage() {
           .select('*')
           .limit(300);
 
-        // ★ 발행일(published_at) 기준 내림차순(최신순)으로 포스트 정렬 조회
+        // 발행일 기준 최신순 정렬
         const { data: pData } = await supabase
           .from('influencer_posts')
           .select('*')
           .order('published_at', { ascending: false })
-          .limit(3000);
+          .limit(5000);
 
         if (cData) setChannels(cData);
         
         if (pData) {
           const map: Record<string, any[]> = {};
           pData.forEach((p: any) => {
-            const rawChannelId = String(p.channel_id || p.influencer_id || '').trim().toLowerCase();
-            if (!rawChannelId) return;
+            // channel_id를 기준으로 정밀 매칭 맵 생성
+            const cid = String(p.channel_id || '').trim();
+            if (!cid) return;
 
-            if (!map[rawChannelId]) map[rawChannelId] = [];
-            map[rawChannelId].push(p);
+            if (!map[cid]) map[cid] = [];
+            map[cid].push(p);
           });
           setPostsMap(map);
         }
@@ -171,11 +172,9 @@ export default function YoutubeDashboardPage() {
           </div>
         ) : (
           displayedChannels.list.map((channel) => {
-            const channelIdKey = String(channel.channel_id || '').trim().toLowerCase();
-            const idKey = String(channel.id || '').trim().toLowerCase();
-            
-            // ★ 정확히 해당 채널의 ID와 매칭되는 포스트만 필터링 (엉뚱한 데이터 강제 주입 제거)
-            const pList = postsMap[channelIdKey] || postsMap[idKey] || [];
+            // ★ influencers 테이블의 channel_id를 정확히 사용하여 postsMap에서 최신 포스트 인출
+            const cId = String(channel.channel_id || '').trim();
+            const pList = postsMap[cId] || [];
 
             const subs = Number(channel.follower_count ?? channel.follwer_count ?? channel.subscriber_count ?? channel.subscribers ?? 0);
             const longFormViews = Number(channel.avg_video_views ?? channel.avg_views ?? 0);
@@ -262,7 +261,7 @@ export default function YoutubeDashboardPage() {
                   </div>
                 </div>
 
-                {/* 최근 발행 영상 콘텐츠 (정확히 매칭된 최신 순 포스트 출력) */}
+                {/* 최근 발행 영상 콘텐츠 (channel_id 기반 정확한 매칭 출력) */}
                 <div className="space-y-2">
                   <p className="text-[11px] font-bold text-slate-400">최근 발행 영상 콘텐츠</p>
                   {pList.length > 0 ? (
@@ -284,8 +283,8 @@ export default function YoutubeDashboardPage() {
                       })}
                     </div>
                   ) : (
-                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 text-center text-xs text-amber-700 font-semibold flex items-center justify-center gap-1.5">
-                      <AlertTriangle size={14} /> `influencer_posts` 테이블에 채널 ID ({channel.channel_id})와 정확히 매칭되는 영상 데이터가 수집되지 않았습니다.
+                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 text-center text-xs text-amber-700 font-semibold">
+                      해당 채널의 `influencer_posts` 데이터가 매칭되지 않았습니다. (Channel ID: {channel.channel_id})
                     </div>
                   )}
                 </div>
