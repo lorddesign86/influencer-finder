@@ -25,22 +25,20 @@ export default function YoutubeDashboardPage() {
     const fetchYoutubeData = async () => {
       setLoading(true);
       try {
-        // 1. 채널 목록과 포스트 데이터를 각각 단 한 번의 쿼리로 병렬 로드하여 속도 극대화
         const [cRes, pRes] = await Promise.all([
           supabase.from('influencers').select('*').limit(300),
-          supabase.from('influencer_posts').select('*').order('published_at', { ascending: false }).limit(2000)
+          supabase.from('influencer_posts').select('*').order('published_at', { ascending: false }).limit(3000)
         ]);
 
         if (cRes.data) setChannels(cRes.data);
 
-        // 2. 메모리 상에서 channel_id 기준으로 포스트 맵을 단 한 번만 생성
+        // ★ 채널 ID 매칭 시 대소문자 및 공백 차이로 인한 누락을 완전히 방지하도록 키 정규화
         if (pRes.data) {
           const map: Record<string, any[]> = {};
           pRes.data.forEach((p: any) => {
-            const cid = String(p.channel_id || '').trim();
+            const cid = String(p.channel_id || p.influencer_id || '').trim().toLowerCase();
             if (!cid) return;
             if (!map[cid]) map[cid] = [];
-            // 채널당 최대 4개까지만 보관하여 메모리 및 렌더링 최적화
             if (map[cid].length < 4) {
               map[cid].push(p);
             }
@@ -168,8 +166,9 @@ export default function YoutubeDashboardPage() {
           </div>
         ) : (
           displayedChannels.list.map((channel) => {
-            const cId = String(channel.channel_id || '').trim();
-            const pList = postsMap[cId] || [];
+            const cIdKey = String(channel.channel_id || '').trim().toLowerCase();
+            const idKey = String(channel.id || '').trim().toLowerCase();
+            const pList = postsMap[cIdKey] || postsMap[idKey] || [];
 
             const subs = Number(channel.follower_count ?? channel.follwer_count ?? channel.subscriber_count ?? channel.subscribers ?? 0);
             const longFormViews = Number(channel.avg_video_views ?? channel.avg_views ?? 0);
@@ -184,7 +183,6 @@ export default function YoutubeDashboardPage() {
                 key={channel.id || channel.channel_id}
                 className="bg-white rounded-2xl border border-slate-200 p-6 shadow-2xs hover:shadow-md transition space-y-4"
               >
-                {/* 상단 프로필 및 버튼 영역 (해시태그 줄바꿈 및 버튼 고정 레이아웃 적용) */}
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-start gap-3.5 min-w-0 flex-1">
                     <img 
@@ -229,7 +227,6 @@ export default function YoutubeDashboardPage() {
                   </div>
                 </div>
 
-                {/* 지표 영역 */}
                 <div className="grid grid-cols-4 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100 text-xs">
                   <div>
                     <span className="text-slate-400">구독자 수</span>
@@ -258,7 +255,6 @@ export default function YoutubeDashboardPage() {
                   </div>
                 </div>
 
-                {/* 최근 발행 영상 콘텐츠 */}
                 <div className="space-y-2">
                   <p className="text-[11px] font-bold text-slate-400">최근 발행 영상 콘텐츠</p>
                   {pList.length > 0 ? (
