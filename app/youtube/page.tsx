@@ -18,50 +18,45 @@ export default function YoutubeDashboardPage() {
   const [selectedTag, setSelectedTag] = useState('전체');
   
   const [channels, setChannels] = useState<any[]>([]);
-  const [postsMap, setPostsMap] = useState<Record<string, any[]>>({});
+  // 각 채널별 최신 포스트를 개별적으로 담아두는 상태
+  const [channelPosts, setChannelPosts] = useState<Record<string, any[]>>({});
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const fetchYoutubeData = async () => {
       setLoading(true);
       try {
-        // 1. 유튜버 채널 목록 로드
+        // 1. 채널 목록 로드
         const { data: cData } = await supabase
           .from('influencers')
           .select('*')
           .limit(300);
 
-        // 2. 포스트 데이터를 발행일 최신순(published_at desc)으로 페이징 없이 안전하게 대량 로드
-        let allPostsData: any[] = [];
-        let rangeStep = 1000;
-        for (let i = 0; i < 5; i++) {
-          const { data: chunk } = await supabase
-            .from('influencer_posts')
-            .select('*')
-            .order('published_at', { ascending: false })
-            .range(i * rangeStep, (i + 1) * rangeStep - 1);
+        if (cData && cData.length > 0) {
+          setChannels(cData);
+
+          // 2. 각 채널별로 Supabase에 직접 channel_id를 조건(=eq)으로 걸어 최신 영상 4개씩 즉시 조회
+          const postsMapping: Record<string, any[]> = {};
           
-          if (chunk && chunk.length > 0) {
-            allPostsData = allPostsData.concat(chunk);
-            if (chunk.length < rangeStep) break;
-          } else {
-            break;
-          }
-        }
+          await Promise.all(
+            cData.map(async (channel) => {
+              const cid = String(channel.channel_id || '').trim();
+              if (!cid) return;
 
-        if (cData) setChannels(cData);
-        
-        // 3. channel_id 기준 1:1 매칭 맵 구축 (이미 최신순으로 정렬되어 들어옴)
-        if (allPostsData.length > 0) {
-          const map: Record<string, any[]> = {};
-          allPostsData.forEach((p: any) => {
-            const cid = String(p.channel_id || '').trim();
-            if (!cid) return;
+              const { data: pData } = await supabase
+                .from('influencer_posts')
+                .select('*')
+                .eq('channel_id', cid)
+                .order('published_at', { ascending: false })
+                .limit(4);
 
-            if (!map[cid]) map[cid] = [];
-            map[cid].push(p);
-          });
-          setPostsMap(map);
+              if (pData && pData.length > 0) {
+                postsMapping[cid] = pData;
+              }
+            })
+          );
+
+          setChannelPosts(postsMapping);
         }
       } finally {
         setLoading(false);
@@ -184,9 +179,8 @@ export default function YoutubeDashboardPage() {
           </div>
         ) : (
           displayedChannels.list.map((channel) => {
-            // ★ 오직 channel_id 값으로만 정확히 매칭
             const cId = String(channel.channel_id || '').trim();
-            const pList = postsMap[cId] || [];
+            const pList = channelPosts[cId] || [];
 
             const subs = Number(channel.follower_count ?? channel.follwer_count ?? channel.subscriber_count ?? channel.subscribers ?? 0);
             const longFormViews = Number(channel.avg_video_views ?? channel.avg_views ?? 0);
@@ -273,12 +267,12 @@ export default function YoutubeDashboardPage() {
                   </div>
                 </div>
 
-                {/* 최근 발행 영상 콘텐츠 (최신순 4개 노출) */}
+                {/* 최근 발행 영상 콘텐츠 (Supabase에서 직접 최신순 조회된 결과 출력) */}
                 <div className="space-y-2">
                   <p className="text-[11px] font-bold text-slate-400">최근 발행 영상 콘텐츠</p>
                   {pList.length > 0 ? (
                     <div className="grid grid-cols-4 gap-3">
-                      {pList.slice(0, 4).map((p: any, i: number) => {
+                      {pList.map((p: any, i: number) => {
                         const thumb = p.thumbnail_url || p.thumbnail || p.image_url || 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=300';
                         const title = p.title || p.post_title || '영상 제목 없음';
                         const pViews = Number(p.view_count || p.views || 0);
