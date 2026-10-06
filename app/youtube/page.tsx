@@ -25,11 +25,13 @@ export default function YoutubeDashboardPage() {
     const fetchYoutubeData = async () => {
       setLoading(true);
       try {
+        // 1. 유튜버 채널 목록 로드
         const { data: cData } = await supabase
           .from('influencers')
           .select('*')
           .limit(300);
 
+        // 2. 포스트 데이터를 발행일 최신순(published_at desc)으로 페이징 없이 안전하게 대량 로드
         let allPostsData: any[] = [];
         let rangeStep = 1000;
         for (let i = 0; i < 5; i++) {
@@ -49,24 +51,15 @@ export default function YoutubeDashboardPage() {
 
         if (cData) setChannels(cData);
         
+        // 3. channel_id 기준 1:1 매칭 맵 구축 (이미 최신순으로 정렬되어 들어옴)
         if (allPostsData.length > 0) {
           const map: Record<string, any[]> = {};
           allPostsData.forEach((p: any) => {
-            // ★ channel_id, influencer_id, id 등 가능한 모든 키 조합을 소문자 및 공백 제거 형태로 등록하여 매칭 확률 100% 보장
-            const rawCid = String(p.channel_id || '').trim();
-            const rawInfId = String(p.influencer_id || '').trim();
-            const rawId = String(p.id || '').trim();
+            const cid = String(p.channel_id || '').trim();
+            if (!cid) return;
 
-            [rawCid, rawInfId, rawId].forEach(k => {
-              if (k) {
-                const lowerKey = k.toLowerCase();
-                if (!map[lowerKey]) map[lowerKey] = [];
-                // 중복 방지 추가
-                if (!map[lowerKey].some(existing => existing.video_id === p.video_id && existing.title === p.title)) {
-                  map[lowerKey].push(p);
-                }
-              }
-            });
+            if (!map[cid]) map[cid] = [];
+            map[cid].push(p);
           });
           setPostsMap(map);
         }
@@ -191,11 +184,9 @@ export default function YoutubeDashboardPage() {
           </div>
         ) : (
           displayedChannels.list.map((channel) => {
-            const cId = String(channel.channel_id || '').trim().toLowerCase();
-            const infId = String(channel.id || '').trim().toLowerCase();
-            
-            // 다중 키 검색으로 포스트 매칭 보장
-            const pList = postsMap[cId] || postsMap[infId] || [];
+            // ★ 오직 channel_id 값으로만 정확히 매칭
+            const cId = String(channel.channel_id || '').trim();
+            const pList = postsMap[cId] || [];
 
             const subs = Number(channel.follower_count ?? channel.follwer_count ?? channel.subscriber_count ?? channel.subscribers ?? 0);
             const longFormViews = Number(channel.avg_video_views ?? channel.avg_views ?? 0);
@@ -282,7 +273,7 @@ export default function YoutubeDashboardPage() {
                   </div>
                 </div>
 
-                {/* 최근 발행 영상 콘텐츠 */}
+                {/* 최근 발행 영상 콘텐츠 (최신순 4개 노출) */}
                 <div className="space-y-2">
                   <p className="text-[11px] font-bold text-slate-400">최근 발행 영상 콘텐츠</p>
                   {pList.length > 0 ? (
@@ -305,7 +296,7 @@ export default function YoutubeDashboardPage() {
                     </div>
                   ) : (
                     <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 text-center text-xs text-amber-700 font-semibold">
-                      해당 채널의 `influencer_posts` 데이터가 아직 로드되지 않았습니다. (Channel ID: {channel.channel_id})
+                      해당 채널의 최신 영상 데이터가 없습니다. (Channel ID: {channel.channel_id})
                     </div>
                   )}
                 </div>
