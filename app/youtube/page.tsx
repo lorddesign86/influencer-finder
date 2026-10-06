@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { 
-  Search, Tag, ChevronRight, Eye, Lock, Sparkles, Mail 
+  Search, Tag, ChevronRight, Eye, Lock, Sparkles, Mail, AlertTriangle 
 } from 'lucide-react';
 
 const YOUTUBE_CATEGORIES = [
@@ -18,7 +18,6 @@ export default function YoutubeDashboardPage() {
   const [selectedTag, setSelectedTag] = useState('전체');
   
   const [channels, setChannels] = useState<any[]>([]);
-  const [allPosts, setAllPosts] = useState<any[]>([]);
   const [postsMap, setPostsMap] = useState<Record<string, any[]>>({});
   const [loading, setLoading] = useState(false);
 
@@ -31,27 +30,23 @@ export default function YoutubeDashboardPage() {
           .select('*')
           .limit(300);
 
+        // ★ 발행일(published_at) 기준 내림차순(최신순)으로 포스트 정렬 조회
         const { data: pData } = await supabase
           .from('influencer_posts')
           .select('*')
-          .limit(1000);
+          .order('published_at', { ascending: false })
+          .limit(3000);
 
         if (cData) setChannels(cData);
         
         if (pData) {
-          setAllPosts(pData);
           const map: Record<string, any[]> = {};
           pData.forEach((p: any) => {
-            const keys = [
-              String(p.channel_id || '').trim().toLowerCase(),
-              String(p.influencer_id || '').trim().toLowerCase(),
-              String(p.id || '').trim().toLowerCase()
-            ].filter(Boolean);
+            const rawChannelId = String(p.channel_id || p.influencer_id || '').trim().toLowerCase();
+            if (!rawChannelId) return;
 
-            keys.forEach(k => {
-              if (!map[k]) map[k] = [];
-              map[k].push(p);
-            });
+            if (!map[rawChannelId]) map[rawChannelId] = [];
+            map[rawChannelId].push(p);
           });
           setPostsMap(map);
         }
@@ -175,16 +170,12 @@ export default function YoutubeDashboardPage() {
             데이터베이스에 일치하는 크리에이터가 없습니다.
           </div>
         ) : (
-          displayedChannels.list.map((channel, idx) => {
+          displayedChannels.list.map((channel) => {
+            const channelIdKey = String(channel.channel_id || '').trim().toLowerCase();
             const idKey = String(channel.id || '').trim().toLowerCase();
-            const cidKey = String(channel.channel_id || '').trim().toLowerCase();
             
-            // 1순위: 정확히 매칭되는 포스트, 2순위: 데이터가 없을 경우 전체 포스트 중 순차 할당하여 시각적 공백 방지
-            let pList = postsMap[cidKey] || postsMap[idKey] || [];
-            if (pList.length === 0 && allPosts.length > 0) {
-              const sliceIdx = (idx * 4) % allPosts.length;
-              pList = allPosts.slice(sliceIdx, sliceIdx + 4);
-            }
+            // ★ 정확히 해당 채널의 ID와 매칭되는 포스트만 필터링 (엉뚱한 데이터 강제 주입 제거)
+            const pList = postsMap[channelIdKey] || postsMap[idKey] || [];
 
             const subs = Number(channel.follower_count ?? channel.follwer_count ?? channel.subscriber_count ?? channel.subscribers ?? 0);
             const longFormViews = Number(channel.avg_video_views ?? channel.avg_views ?? 0);
@@ -271,26 +262,32 @@ export default function YoutubeDashboardPage() {
                   </div>
                 </div>
 
-                {/* 최근 발행 영상 콘텐츠 */}
+                {/* 최근 발행 영상 콘텐츠 (정확히 매칭된 최신 순 포스트 출력) */}
                 <div className="space-y-2">
                   <p className="text-[11px] font-bold text-slate-400">최근 발행 영상 콘텐츠</p>
-                  <div className="grid grid-cols-4 gap-3">
-                    {pList.slice(0, 4).map((p: any, i: number) => {
-                      const thumb = p.thumbnail_url || p.thumbnail || p.image_url || 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=300';
-                      const title = p.title || p.post_title || `${channel.name} 하이라이트 영상 #${i+1}`;
-                      const pViews = Number(p.view_count || p.views || longFormViews);
+                  {pList.length > 0 ? (
+                    <div className="grid grid-cols-4 gap-3">
+                      {pList.slice(0, 4).map((p: any, i: number) => {
+                        const thumb = p.thumbnail_url || p.thumbnail || p.image_url || 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=300';
+                        const title = p.title || p.post_title || '영상 제목 없음';
+                        const pViews = Number(p.view_count || p.views || 0);
 
-                      return (
-                        <div key={i} className="group relative block rounded-xl border border-slate-100 overflow-hidden bg-slate-100 aspect-video">
-                          <img src={thumb} alt="" className="w-full h-full object-cover group-hover:scale-105 transition duration-300" referrerPolicy="no-referrer" />
-                          <div className="absolute inset-0 bg-black/80 backdrop-blur-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-center items-center text-center p-3 text-white space-y-1">
-                            <p className="text-[11px] font-bold line-clamp-2 px-1">{title}</p>
-                            <span className="text-[10px] text-rose-400 flex items-center gap-1"><Eye size={10} /> {pViews.toLocaleString()}회</span>
+                        return (
+                          <div key={i} className="group relative block rounded-xl border border-slate-100 overflow-hidden bg-slate-100 aspect-video">
+                            <img src={thumb} alt="" className="w-full h-full object-cover group-hover:scale-105 transition duration-300" referrerPolicy="no-referrer" />
+                            <div className="absolute inset-0 bg-black/80 backdrop-blur-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-center items-center text-center p-3 text-white space-y-1">
+                              <p className="text-[11px] font-bold line-clamp-2 px-1">{title}</p>
+                              <span className="text-[10px] text-rose-400 flex items-center gap-1"><Eye size={10} /> {pViews > 0 ? `${pViews.toLocaleString()}회` : '조회수 정보 없음'}</span>
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 text-center text-xs text-amber-700 font-semibold flex items-center justify-center gap-1.5">
+                      <AlertTriangle size={14} /> `influencer_posts` 테이블에 채널 ID ({channel.channel_id})와 정확히 매칭되는 영상 데이터가 수집되지 않았습니다.
+                    </div>
+                  )}
                 </div>
               </div>
             );
