@@ -69,7 +69,6 @@ export default function YoutubeDashboardPage() {
     
     if (!q && selectedTag === '전체') {
       const sorted = [...channels].sort((a, b) => {
-        // 실제 스키마의 follwer_count 및 subscriber_count 매칭
         const subA = Number(a.follwer_count ?? a.subscriber_count ?? a.subscribers ?? 0);
         const subB = Number(b.follwer_count ?? b.subscriber_count ?? b.subscribers ?? 0);
         return subB - subA;
@@ -101,6 +100,7 @@ export default function YoutubeDashboardPage() {
   }, [channels, search, selectedTag]);
 
   const handleOpenDetail = (channel: any) => {
+    // 상세 페이지로 이동할 때 channel_id 또는 id를 확실하게 전달
     const targetId = channel.channel_id || channel.id;
     router.push(`/youtube/${targetId}`);
   };
@@ -113,7 +113,7 @@ export default function YoutubeDashboardPage() {
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
             <input 
               type="text" 
-              placeholder="유튜버 이름이나 키워드를 검색하세요 (예: 보검TV, 브이로그...)" 
+              placeholder="유튜버 이름이나 키워드를 검색하세요 (예: 브이로그, 맛집, 여행...)" 
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-12 pr-4 py-3 border border-slate-200 rounded-full text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500 transition shadow-inner"
@@ -174,7 +174,7 @@ export default function YoutubeDashboardPage() {
             const cidKey = String(channel.channel_id || '').trim().toLowerCase();
             const pList = postsMap[cidKey] || postsMap[idKey] || [];
 
-            // ★ 공유해주신 정확한 DB 헤더 스키마 매핑
+            // ★ 공유해주신 실제 헤더 스키마 매핑
             const subs = Number(channel.follwer_count ?? channel.subscriber_count ?? channel.subscribers ?? 0);
             const longFormViews = Number(channel.avg_video_views ?? channel.avg_views ?? 0);
             const shortFormViews = Number(channel.avg_shorts_views ?? 0);
@@ -229,7 +229,6 @@ export default function YoutubeDashboardPage() {
                   </div>
                 </div>
 
-                {/* ★ 구독자수(follwer_count), 롱폼조회수(avg_video_views), 숏폼조회수(avg_shorts_views), 광고단가(estimated_video_cpv_price) */}
                 <div className="grid grid-cols-4 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100 text-xs">
                   <div>
                     <span className="text-slate-400">구독자 수</span>
@@ -258,7 +257,6 @@ export default function YoutubeDashboardPage() {
                   </div>
                 </div>
 
-                {/* 최근 발행 영상 콘텐츠 (influencer_posts) */}
                 <div className="space-y-2">
                   <p className="text-[11px] font-bold text-slate-400">최근 발행 영상 콘텐츠</p>
                   {pList.length > 0 ? (
