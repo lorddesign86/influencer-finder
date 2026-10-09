@@ -18,44 +18,32 @@ export default function YoutubeDashboardPage() {
   const [selectedTag, setSelectedTag] = useState('전체');
   
   const [channels, setChannels] = useState<any[]>([]);
-  const [channelPosts, setChannelPosts] = useState<Record<string, any[]>>({});
+  const [postsMap, setPostsMap] = useState<Record<string, any[]>>({});
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const fetchYoutubeData = async () => {
       setLoading(true);
       try {
-        // 1. 채널 목록 로드
-        const { data: cData } = await supabase
-          .from('influencers')
-          .select('*')
-          .limit(300);
+        // 채널과 포스트를 단 두 번의 병렬 요청으로 한 번에 가져와서 속도를 극대화합니다.
+        const [cRes, pRes] = await Promise.all([
+          supabase.from('influencers').select('*').limit(300),
+          supabase.from('influencer_posts').select('*').order('published_at', { ascending: false }).limit(3000)
+        ]);
 
-        if (cData && cData.length > 0) {
-          setChannels(cData);
+        if (cRes.data) setChannels(cRes.data);
 
-          // 2. 각 채널별로 Supabase에 직접 channel_id를 조건(=eq)으로 걸어 최신 영상 4개씩 확실하게 조회
-          const postsMapping: Record<string, any[]> = {};
-          
-          await Promise.all(
-            cData.map(async (channel) => {
-              const cid = String(channel.channel_id || '').trim();
-              if (!cid) return;
-
-              const { data: pData } = await supabase
-                .from('influencer_posts')
-                .select('*')
-                .eq('channel_id', cid)
-                .order('published_at', { ascending: false })
-                .limit(4);
-
-              if (pData && pData.length > 0) {
-                postsMapping[cid] = pData;
-              }
-            })
-          );
-
-          setChannelPosts(postsMapping);
+        if (pRes.data) {
+          const map: Record<string, any[]> = {};
+          pRes.data.forEach((p: any) => {
+            const cid = String(p.channel_id || p.influencer_id || '').trim();
+            if (!cid) return;
+            if (!map[cid]) map[cid] = [];
+            if (map[cid].length < 4) {
+              map[cid].push(p);
+            }
+          });
+          setPostsMap(map);
         }
       } finally {
         setLoading(false);
@@ -171,7 +159,7 @@ export default function YoutubeDashboardPage() {
         </div>
 
         {loading ? (
-          <div className="p-20 text-center text-sm text-slate-400">유튜버 데이터를 불러오는 중...</div>
+          <div className="p-20 text-center text-sm text-slate-400">유튜버 데이터를 초고속으로 불러오는 중...</div>
         ) : displayedChannels.list.length === 0 ? (
           <div className="p-20 text-center text-sm text-slate-400 bg-white rounded-2xl border border-slate-200">
             데이터베이스에 일치하는 크리에이터가 없습니다.
@@ -179,7 +167,7 @@ export default function YoutubeDashboardPage() {
         ) : (
           displayedChannels.list.map((channel) => {
             const cId = String(channel.channel_id || '').trim();
-            const pList = channelPosts[cId] || [];
+            const pList = postsMap[cId] || [];
 
             const subs = Number(channel.follower_count ?? channel.follwer_count ?? channel.subscriber_count ?? channel.subscribers ?? 0);
             const longFormViews = Number(channel.avg_video_views ?? channel.avg_views ?? 0);
