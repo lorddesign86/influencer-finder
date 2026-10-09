@@ -18,32 +18,44 @@ export default function YoutubeDashboardPage() {
   const [selectedTag, setSelectedTag] = useState('전체');
   
   const [channels, setChannels] = useState<any[]>([]);
-  const [postsMap, setPostsMap] = useState<Record<string, any[]>>({});
+  const [channelPosts, setChannelPosts] = useState<Record<string, any[]>>({});
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const fetchYoutubeData = async () => {
       setLoading(true);
       try {
-        const [cRes, pRes] = await Promise.all([
-          supabase.from('influencers').select('*').limit(300),
-          supabase.from('influencer_posts').select('*').order('published_at', { ascending: false }).limit(3000)
-        ]);
+        // 1. 채널 목록 로드
+        const { data: cData } = await supabase
+          .from('influencers')
+          .select('*')
+          .limit(300);
 
-        if (cRes.data) setChannels(cRes.data);
+        if (cData && cData.length > 0) {
+          setChannels(cData);
 
-        // ★ 채널 ID 매칭 시 대소문자 및 공백 차이로 인한 누락을 완전히 방지하도록 키 정규화
-        if (pRes.data) {
-          const map: Record<string, any[]> = {};
-          pRes.data.forEach((p: any) => {
-            const cid = String(p.channel_id || p.influencer_id || '').trim().toLowerCase();
-            if (!cid) return;
-            if (!map[cid]) map[cid] = [];
-            if (map[cid].length < 4) {
-              map[cid].push(p);
-            }
-          });
-          setPostsMap(map);
+          // 2. 각 채널별로 Supabase에 직접 channel_id를 조건(=eq)으로 걸어 최신 영상 4개씩 확실하게 조회
+          const postsMapping: Record<string, any[]> = {};
+          
+          await Promise.all(
+            cData.map(async (channel) => {
+              const cid = String(channel.channel_id || '').trim();
+              if (!cid) return;
+
+              const { data: pData } = await supabase
+                .from('influencer_posts')
+                .select('*')
+                .eq('channel_id', cid)
+                .order('published_at', { ascending: false })
+                .limit(4);
+
+              if (pData && pData.length > 0) {
+                postsMapping[cid] = pData;
+              }
+            })
+          );
+
+          setChannelPosts(postsMapping);
         }
       } finally {
         setLoading(false);
@@ -166,9 +178,8 @@ export default function YoutubeDashboardPage() {
           </div>
         ) : (
           displayedChannels.list.map((channel) => {
-            const cIdKey = String(channel.channel_id || '').trim().toLowerCase();
-            const idKey = String(channel.id || '').trim().toLowerCase();
-            const pList = postsMap[cIdKey] || postsMap[idKey] || [];
+            const cId = String(channel.channel_id || '').trim();
+            const pList = channelPosts[cId] || [];
 
             const subs = Number(channel.follower_count ?? channel.follwer_count ?? channel.subscriber_count ?? channel.subscribers ?? 0);
             const longFormViews = Number(channel.avg_video_views ?? channel.avg_views ?? 0);
