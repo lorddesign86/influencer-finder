@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { getFavorites } from '@/lib/favorites';
-import { Bookmark, Search } from 'lucide-react';
+import { Bookmark, Search, Zap } from 'lucide-react';
 
 export default function YoutubeSearchPage() {
   const router = useRouter();
@@ -11,8 +11,11 @@ export default function YoutubeSearchPage() {
   const [selectedCategory, setSelectedCategory] = useState('전체');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [favoritesMap, setFavoritesMap] = useState<Record<string, any>>({});
+  
+  // PRO 모드 토글 상태 추가
+  const [isProMode, setIsProMode] = useState(true);
 
-  // 풍성하게 채운 유튜버 샘플 데이터 리스트
+  // 풍성하게 보강된 유튜버 리스트 데이터
   const [channels, setChannels] = useState([
     {
       id: 'hyojin',
@@ -66,6 +69,24 @@ export default function YoutubeSearchPage() {
         { title: '절대 사지 마세요 테크 기기', img: 'https://images.unsplash.com/photo-1526738549149-8e07eca6c147?w=300' },
         { title: '개발자의 일상 브이로그', img: 'https://images.unsplash.com/photo-1531482615713-2afd69097998?w=300' },
         { title: '미래형 스마트홈 구축기', img: 'https://images.unsplash.com/photo-1558002038-1055907df827?w=300' },
+      ]
+    },
+    {
+      id: 'kimchef',
+      channel_id: 'kimchef',
+      name: '김셰프의 킵쿡',
+      handle: 'kimchef_cook',
+      category: '푸드',
+      profile_img_url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150',
+      subscriber_count: 420000,
+      long_views: 350000,
+      shorts_views: 950000,
+      estimated_price: 4000000,
+      videos: [
+        { title: '레스토랑 스테이크 집에서 굽기', img: 'https://images.unsplash.com/photo-1544025162-d76694265947?w=300' },
+        { title: '파스타 면 종류별 완벽 정리', img: 'https://images.unsplash.com/photo-1551183053-bf91a1d81141?w=300' },
+        { title: '초간단 수제 소스 만들기', img: 'https://images.unsplash.com/photo-1476224203421-9ac39bcb3327?w=300' },
+        { title: '냉장고 파먹기 챌린지', img: 'https://images.unsplash.com/photo-1498837167922-ddd27525d352?w=300' },
       ]
     }
   ]);
@@ -180,7 +201,22 @@ export default function YoutubeSearchPage() {
               className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
             />
           </div>
-          <div className="flex items-center gap-2">
+
+          <div className="flex items-center gap-3">
+            {/* PRO 모드 켜기/끄기 토글 버튼 복구 */}
+            <button
+              type="button"
+              onClick={() => setIsProMode(!isProMode)}
+              className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border ${
+                isProMode 
+                  ? 'bg-amber-50 text-amber-700 border-amber-300 shadow-2xs' 
+                  : 'bg-slate-100 text-slate-500 border-slate-200'
+              }`}
+            >
+              <Zap size={14} className={isProMode ? 'fill-amber-500 text-amber-500' : ''} />
+              PRO 모드: {isProMode ? 'ON' : 'OFF'}
+            </button>
+
             <button 
               type="button"
               onClick={() => router.push('/favorites')}
@@ -272,6 +308,11 @@ export default function YoutubeSearchPage() {
                         <span className="text-[10px] px-2 py-0.5 font-extrabold rounded bg-red-50 text-red-600 border border-red-100 uppercase">
                           YouTube
                         </span>
+                        {isProMode && (
+                          <span className="text-[10px] px-1.5 py-0.5 font-bold rounded bg-amber-100 text-amber-800">
+                            PRO
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs text-slate-400 truncate">@{item.handle}</p>
                       <span className="inline-block mt-1 text-[11px] font-bold text-red-500 bg-red-50 px-2 py-0.5 rounded-md">
@@ -303,6 +344,7 @@ export default function YoutubeSearchPage() {
                       광고문의
                     </button>
 
+                    {/* 채널 상세 페이지 정상 라우팅 연결 */}
                     <button
                       type="button"
                       onClick={() => router.push(`/youtube/${id}`)}
@@ -336,14 +378,18 @@ export default function YoutubeSearchPage() {
                   </div>
                 </div>
 
-                {/* 하단: 최신 콘텐츠 4개 미리보기 */}
+                {/* 하단: 최신 콘텐츠 4개 미리보기 (레이아웃 개선 및 썸네일 고정) */}
                 <div className="space-y-2">
                   <span className="text-xs font-bold text-slate-500 block">최근 발행 콘텐츠</span>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                     {item.videos.map((video, idx) => (
-                      <div key={idx} className="group relative rounded-xl overflow-hidden border border-slate-200 aspect-video bg-slate-100">
-                        <img src={video.img} alt={video.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
-                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-2 pt-4">
+                      <div key={idx} className="group relative rounded-xl overflow-hidden border border-slate-200 aspect-video bg-slate-100 flex flex-col justify-end">
+                        <img 
+                          src={video.img} 
+                          alt={video.title} 
+                          className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition duration-300" 
+                        />
+                        <div className="relative z-10 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-2.5 pt-6">
                           <p className="text-[11px] text-white font-bold truncate">{video.title}</p>
                         </div>
                       </div>
