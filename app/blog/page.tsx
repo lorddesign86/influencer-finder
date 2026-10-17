@@ -138,7 +138,6 @@ export default function BlogInfluencerPage() {
 
       if (selectedCategory !== '전체') {
         const catLower = selectedCategory.toLowerCase();
-        // '동물·펫' 같은 특수문자 분리 매칭 지원
         const subCats = catLower.split(/[·/]/).filter(Boolean);
         const catMatch = subCats.some(sc => fullBlogText.includes(sc)) || isMatchedFromPosts;
         if (!catMatch) return false;
@@ -316,7 +315,7 @@ export default function BlogInfluencerPage() {
       </div>
 
       <div className="max-w-5xl mx-auto w-full p-8 space-y-4">
-        {/* 정렬 탭 & 무료 열람 안내 바 (스크린샷과 동일한 구성) */}
+        {/* 정렬 탭 & 무료 열람 안내 바 */}
         <div className="bg-white px-5 py-3.5 rounded-2xl border border-slate-200 flex flex-wrap items-center justify-between gap-4 shadow-2xs">
           <div className="flex items-center gap-2 text-xs">
             <span className="font-bold text-slate-400 flex items-center gap-1 mr-1">
@@ -417,7 +416,6 @@ export default function BlogInfluencerPage() {
                 {/* 상단 프로필 + 좌측 체크박스 + 우측 버튼 고정 */}
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-start gap-3.5 min-w-0 flex-1">
-                    {/* ★ 요청하신 프로필 좌측 체크박스 */}
                     <button
                       type="button"
                       onClick={() => toggleSelectBlog(bId)}
@@ -456,7 +454,7 @@ export default function BlogInfluencerPage() {
                     </div>
                   </div>
 
-                  {/* 우측 액션 버튼 영역 (절대 밀리지 않도록 flex-shrink-0 고정) */}
+                  {/* 우측 액션 버튼 영역 */}
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <button
                       type="button"
@@ -477,9 +475,10 @@ export default function BlogInfluencerPage() {
                     >
                       <Mail size={13} /> 광고 문의
                     </a>
+                    {/* ★ 내부 블로그 상세 분석 페이지로 이동 */}
                     <button
                       type="button"
-                      onClick={() => window.open(blog.blog_url || `https://blog.naver.com/${bId}`, '_blank')}
+                      onClick={() => router.push(`/blog/${bId}`)}
                       className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition shadow-xs cursor-pointer whitespace-nowrap"
                     >
                       채널 상세 <ChevronRight size={14} />
@@ -553,7 +552,7 @@ export default function BlogInfluencerPage() {
         )}
       </div>
 
-      {/* ★ 하단 플로팅 다중 선택 액션 바 */}
+      {/* 하단 플로팅 다중 선택 액션 바 */}
       {selectedIds.size > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white px-6 py-3.5 rounded-2xl shadow-xl flex items-center gap-6 border border-slate-700">
           <span className="text-xs font-bold">
