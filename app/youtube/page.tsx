@@ -4,10 +4,10 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { 
-  getFavorites, toggleFavoriteItem, addBulkFavorites, FavoriteItem 
+  getFavorites, toggleFavoriteItem, FavoriteItem 
 } from '@/lib/favorites';
 import { 
-  Search, ChevronRight, Eye, Mail, Bookmark, CheckSquare, Square, Check, Zap, ArrowUpDown 
+  Search, ChevronRight, Mail, Bookmark, Check, ArrowUpDown 
 } from 'lucide-react';
 
 const YOUTUBE_CATEGORIES = [
@@ -41,21 +41,31 @@ export default function YoutubeInfluencerPage() {
     return () => window.removeEventListener('favorites-updated', handleSync);
   }, []);
 
-  // 유튜브 인플루언서 데이터 로드 (테이블명은 환경에 맞게 조정)
+  // 유튜브 인플루언서 전체 데이터 로드 (필요시 .from('실제테이블명')으로 수정 가능)
   useEffect(() => {
     const fetchChannels = async () => {
       setLoading(true);
       try {
-        const { data, error } = await supabase
-          .from('youtube_influencers') // 혹은 채널 데이터 테이블명
-          .select('*')
-          .limit(100);
+        let allChannels: any[] = [];
+        const step = 1000;
+        for (let i = 0; i < 5; i++) {
+          const { data, error } = await supabase
+            .from('youtube_influencers') // 또는 channels / youtube_channels
+            .select('*')
+            .range(i * step, (i + 1) * step - 1);
 
-        if (error) {
-          console.error('유튜버 로드 에러:', error);
-        } else if (data) {
-          setChannels(data);
+          if (error) {
+            console.error('유튜버 로드 에러:', error);
+            break;
+          }
+          if (data && data.length > 0) {
+            allChannels = allChannels.concat(data);
+            if (data.length < step) break;
+          } else {
+            break;
+          }
         }
+        setChannels(allChannels);
       } finally {
         setLoading(false);
       }
@@ -64,10 +74,10 @@ export default function YoutubeInfluencerPage() {
   }, []);
 
   const getMetrics = (item: any) => {
-    const subscribers = Number(item.subscriber_count ?? item.subscribers ?? 0);
-    const longViews = Number(item.avg_long_views ?? item.long_views ?? item.daily_views ?? 0);
+    const subscribers = Number(item.subscriber_count ?? item.subscribers ?? item.follwer_count ?? 0);
+    const longViews = Number(item.avg_long_views ?? item.long_views ?? item.daily_visitors ?? item.avg_views ?? 0);
     const shortsViews = Number(item.avg_shorts_views ?? item.shorts_views ?? 0);
-    const price = Number(item.estimated_price ?? item.ad_price ?? 300000);
+    const price = Number(item.estimated_price ?? item.ad_price ?? item.manuscript_fee ?? (subscribers > 0 ? Math.round((subscribers * 3.5) / 10000) * 10000 : 300000));
     return { subscribers, longViews, shortsViews, price };
   };
 
@@ -76,14 +86,15 @@ export default function YoutubeInfluencerPage() {
 
     const filtered = channels.filter((item) => {
       const fullText = [
-        item.name, item.channel_name, item.handle, item.category, item.description
+        item.name, item.channel_name, item.handle, item.category, item.description, item.title
       ].filter(Boolean).join(' ').toLowerCase();
 
       if (selectedCategory !== '전체' && !fullText.includes(selectedCategory.toLowerCase())) {
         return false;
       }
       if (!q) return true;
-      return fullText.includes(q);
+      const keywords = q.split(/\s+/).filter(Boolean);
+      return keywords.some(kw => fullText.includes(kw));
     });
 
     const sorted = [...filtered].sort((a, b) => {
@@ -97,7 +108,7 @@ export default function YoutubeInfluencerPage() {
     });
 
     return {
-      list: sorted,
+      list: sorted.slice(0, 50),
       totalCount: sorted.length
     };
   }, [channels, search, selectedCategory, sortBy]);
@@ -110,7 +121,7 @@ export default function YoutubeInfluencerPage() {
       platform: 'youtube',
       name: channel.name || channel.channel_name || cId,
       handle: cleanId(channel.handle || cId),
-      profile_img_url: channel.profile_img_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+      profile_img_url: channel.profile_img_url || channel.profile_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
       tags: [channel.category || '유튜버'],
       metric1: subscribers,
       metric2: longViews,
@@ -132,11 +143,10 @@ export default function YoutubeInfluencerPage() {
   return (
     <div className="flex-1 flex flex-col h-full bg-[#f8f9fa] overflow-y-auto relative pb-24">
       
-      {/* 1. 상단 영역 컴팩트하게 압축 및 모바일 최적화 검색창 확대 */}
+      {/* 1. 상단 영역 압축 및 모바일 최적화된 대형 검색창 */}
       <div className="bg-white border-b border-slate-200 px-3 md:px-6 py-2.5 sticky top-0 z-20 space-y-2 shadow-2xs">
         <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-2">
           
-          {/* 검색창을 전체 너비로 시원하게 배치 */}
           <div className="relative w-full flex-1">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
             <input 
@@ -167,7 +177,7 @@ export default function YoutubeInfluencerPage() {
           </div>
         </div>
 
-        {/* 카테고리 스크롤 태그 */}
+        {/* 카테고리 태그 스크롤 */}
         <div className="max-w-5xl mx-auto flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar">
           {YOUTUBE_CATEGORIES.map((cat) => (
             <button
@@ -213,7 +223,7 @@ export default function YoutubeInfluencerPage() {
           <span className="text-[11px] font-bold text-slate-500">검색 결과: {displayedChannels.totalCount}개</span>
         </div>
 
-        {/* 유튜버 리스트 카드 영역 (모바일 깨짐 방지 세로형/그리드 배치) */}
+        {/* 유튜버 리스트 카드 영역 (모바일 깨짐 방지 세로형 및 2x2 그리드 배치) */}
         {loading ? (
           <div className="p-16 text-center text-xs text-slate-400 bg-white rounded-2xl border border-slate-200">
             유튜버 목록을 불러오는 중입니다...
@@ -230,7 +240,7 @@ export default function YoutubeInfluencerPage() {
             const isFavorited = Boolean(favoritesMap[favKey]);
             const { subscribers, longViews, shortsViews, price } = getMetrics(channel);
 
-            const profileImg = channel.profile_img_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150';
+            const profileImg = channel.profile_img_url || channel.profile_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150';
 
             return (
               <div 
