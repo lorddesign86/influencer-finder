@@ -61,12 +61,12 @@ export default function RootLayout({
               <div>
                 <p className="text-xs font-semibold text-slate-400 px-3 mb-2 tracking-wider">분석 도구</p>
                 <nav className="space-y-1">
-                  <button 
-                    type="button"
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 transition"
+                  <Link
+                  href="/compare"
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 transition"
                   >
-                    <BarChart3 size={18} /> 채널 비교분석
-                  </button>
+                  <BarChart3 size={18} /> 채널 비교분석
+                  </Link>
                   <button 
                     type="button"
                     className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 transition"
