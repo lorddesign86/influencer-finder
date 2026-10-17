@@ -3,10 +3,10 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
-  getFavorites, removeFavoriteItem, updateCustomPrice, updateFavoriteFolder, addBulkFavorites, FavoriteItem 
+  getFavorites, removeFavoriteItem, updateCustomPrice, updateFavoriteFolder, FavoriteItem 
 } from '@/lib/favorites';
 import { 
-  Bookmark, Folder, Download, Plus, Trash2, Edit3, Check, FolderInput 
+  Bookmark, Folder, Download, Plus, Trash2, Edit3, Check 
 } from 'lucide-react';
 
 export default function FavoritesPage() {
@@ -17,6 +17,7 @@ export default function FavoritesPage() {
   const [folders, setFolders] = useState<string[]>(['기본 폴더', '관심 캠페인', '섭외 1순위']);
   
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkTargetFolder, setBulkTargetFolder] = useState<string>('');
   const [editingPriceId, setEditingPriceId] = useState<string | null>(null);
   const [tempPrice, setTempPrice] = useState<string>('');
 
@@ -30,7 +31,6 @@ export default function FavoritesPage() {
     return () => window.removeEventListener('favorites-updated', loadFavs);
   }, []);
 
-  // 탭 및 폴더 필터링
   const filteredFavorites = favorites.filter(item => {
     if (activeTab === 'youtube' && item.platform !== 'youtube') return false;
     if (activeTab === 'blog' && item.platform !== 'blog') return false;
@@ -63,24 +63,20 @@ export default function FavoritesPage() {
     setFavorites(Object.values(getFavorites()));
   };
 
-  // 개별 채널 폴더 변경
   const handleChangeItemFolder = (id: string, newFolder: string) => {
     updateFavoriteFolder(id, newFolder);
     setFavorites(Object.values(getFavorites()));
   };
 
-  // 선택한 채널들 일괄 폴더 이동
   const handleBulkMoveFolder = (targetFolder: string) => {
-    if (selectedIds.size === 0) {
-      alert('이동할 채널을 먼저 선택해주세요.');
-      return;
-    }
+    if (!targetFolder || selectedIds.size === 0) return;
     selectedIds.forEach(id => {
       updateFavoriteFolder(id, targetFolder);
     });
     setFavorites(Object.values(getFavorites()));
     setSelectedIds(new Set());
-    alert(`선택한 ${selectedIds.size개}개의 채널이 '${targetFolder}'(으)로 이동되었습니다.`);
+    setBulkTargetFolder('');
+    alert(`선택한 ${selectedIds.size}개의 채널이 '${targetFolder}'(으)로 이동되었습니다.`);
   };
 
   const goToDetail = (item: FavoriteItem) => {
@@ -158,16 +154,19 @@ export default function FavoritesPage() {
               <Folder size={14} /> 폴더 관리
             </button>
 
-            {/* 선택한 항목 일괄 이동 버튼 */}
+            {/* 선택한 항목 일괄 이동 셀렉트 */}
             {selectedIds.size > 0 && (
               <div className="flex items-center gap-1.5 bg-red-50 border border-red-200 px-3 py-1.5 rounded-xl">
                 <span className="text-xs font-bold text-red-600">{selectedIds.size}개 선택됨:</span>
                 <select 
+                  value={bulkTargetFolder}
                   onChange={(e) => {
-                    if (e.target.value) handleBulkMoveFolder(e.target.value);
-                    e.target.value = '';
+                    const val = e.target.value;
+                    setBulkTargetFolder(val);
+                    if (val) {
+                      handleBulkMoveFolder(val);
+                    }
                   }}
-                  defaultValue=""
                   className="px-2 py-1 bg-white border border-red-300 rounded-lg text-xs font-bold text-slate-700 focus:outline-none cursor-pointer"
                 >
                   <option value="" disabled>폴더로 이동...</option>
@@ -195,7 +194,7 @@ export default function FavoritesPage() {
           </div>
         </div>
 
-        {/* 즐겨찾기 리스트 (왼쪽 프로필 고정 + 개별 폴더 변경 드롭다운 추가) */}
+        {/* 즐겨찾기 리스트 */}
         {filteredFavorites.length === 0 ? (
           <div className="p-20 text-center text-sm text-slate-400 bg-white rounded-2xl border border-slate-200">
             저장된 즐겨찾기 항목이 없습니다. 탐색 페이지에서 채널을 추가해 보세요!
