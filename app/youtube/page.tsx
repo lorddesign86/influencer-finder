@@ -32,7 +32,7 @@ export default function YoutubeDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [postsLoading, setPostsLoading] = useState(false);
 
-  // ★ 체크박스 다중 선택 및 즐겨찾기 상태
+  // 체크박스 다중 선택 및 즐겨찾기 상태
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [favoritesMap, setFavoritesMap] = useState<Record<string, FavoriteItem>>({});
 
@@ -197,7 +197,6 @@ export default function YoutubeDashboardPage() {
     fetchPostsForDisplayed();
   }, [displayedChannels.list]);
 
-  // 채널 객체를 FavoriteItem 포맷으로 변환
   const toFavoriteItem = (channel: any): FavoriteItem => {
     const cId = cleanId(channel.channel_id || channel.id);
     const subs = Number(channel.follower_count ?? channel.follwer_count ?? channel.subscriber_count ?? channel.subscribers ?? 0);
@@ -221,7 +220,6 @@ export default function YoutubeDashboardPage() {
     };
   };
 
-  // 체크박스 개별 토글
   const toggleSelectChannel = (cId: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
@@ -231,7 +229,6 @@ export default function YoutubeDashboardPage() {
     });
   };
 
-  // 현재 노출된 리스트 전체 선택/해제
   const toggleSelectAllDisplayed = () => {
     const currentIds = displayedChannels.list.map(c => cleanId(c.channel_id || c.id));
     const allSelected = currentIds.length > 0 && currentIds.every(id => selectedIds.has(id));
@@ -243,7 +240,6 @@ export default function YoutubeDashboardPage() {
     }
   };
 
-  // 선택한 채널 일괄 즐겨찾기 저장
   const handleBulkAddFavorites = () => {
     const selectedChannels = channels.filter(c => selectedIds.has(cleanId(c.channel_id || c.id)));
     const items = selectedChannels.map(toFavoriteItem);
@@ -323,7 +319,6 @@ export default function YoutubeDashboardPage() {
           </div>
         )}
 
-        {/* 상단 전체 선택 컨트롤 바 */}
         <div className="text-xs text-slate-500 font-semibold px-2 flex items-center justify-between bg-white py-3 rounded-xl border border-slate-200">
           <div className="flex items-center gap-3">
             <button
@@ -390,7 +385,6 @@ export default function YoutubeDashboardPage() {
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-start gap-3.5 min-w-0 flex-1">
-                    {/* ★ 요청하신 프로필 좌측 체크박스 */}
                     <button
                       type="button"
                       onClick={() => toggleSelectChannel(cId)}
@@ -430,7 +424,6 @@ export default function YoutubeDashboardPage() {
                   </div>
 
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    {/* 개별 즐겨찾기 토글 버튼 */}
                     <button
                       type="button"
                       onClick={() => toggleFavoriteItem(toFavoriteItem(channel))}
@@ -472,4 +465,99 @@ export default function YoutubeDashboardPage() {
                   </div>
                   <div>
                     <span className="text-slate-400">평균 조회수 (숏폼)</span>
-                    <p className="text-sm font-black text-red-600 mt-0.5">{shortFormViews >
+                    <p className="text-sm font-black text-red-600 mt-0.5">{shortFormViews > 0 ? `${shortFormViews.toLocaleString()}회` : '0회'}</p>
+                  </div>
+                  <div>
+                    <span className="text-slate-400">광고 단가 (회원 설정 가능)</span>
+                    {isProUser ? (
+                      <p className="text-sm font-black text-rose-600 mt-0.5">
+                        {customPrice != null 
+                          ? `${Number(customPrice).toLocaleString()}원 (내 설정가)` 
+                          : estPrice > 0 ? `${estPrice.toLocaleString()}원~` : '0원'}
+                      </p>
+                    ) : (
+                      <div className="relative mt-0.5">
+                        <span className="filter blur-[4px] select-none text-slate-400 font-bold">1,500,000원</span>
+                        <span className="absolute inset-0 flex items-center text-[10px] text-amber-800 font-bold bg-amber-50/90 px-2 rounded border border-amber-200">
+                          <Lock size={10} className="mr-0.5" /> PRO 전용
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-[11px] font-bold text-slate-400">최근 발행 영상 콘텐츠</p>
+                  {pList.length > 0 ? (
+                    <div className="grid grid-cols-4 gap-3">
+                      {pList.map((p: any, i: number) => {
+                        const thumb = p.thumbnail_url || p.thumbnail || p.image_url || 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=300';
+                        const title = p.title || p.post_title || '영상 제목 없음';
+                        const pViews = Number(p.view_count || p.views || 0);
+
+                        return (
+                          <a 
+                            key={i} 
+                            href={p.post_url || (p.video_id ? `https://www.youtube.com/watch?v=${p.video_id}` : '#')}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="group relative block rounded-xl border border-slate-100 overflow-hidden bg-slate-100 aspect-video"
+                          >
+                            <img src={thumb} alt="" className="w-full h-full object-cover group-hover:scale-105 transition duration-300" referrerPolicy="no-referrer" />
+                            <div className="absolute inset-0 bg-black/80 backdrop-blur-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-center items-center text-center p-3 text-white space-y-1">
+                              <p className="text-[11px] font-bold line-clamp-2 px-1">{title}</p>
+                              <span className="text-[10px] text-rose-400 flex items-center gap-1"><Eye size={10} /> {pViews > 0 ? `${pViews.toLocaleString()}회` : '조회수 집계중'}</span>
+                            </div>
+                          </a>
+                        );
+                      })}
+                    </div>
+                  ) : !isChannelPostLoaded && postsLoading ? (
+                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 text-center text-xs text-slate-400">
+                      최신 영상을 불러오는 중...
+                    </div>
+                  ) : (
+                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 text-center text-xs text-amber-700 font-semibold">
+                      DB(`influencer_posts`)에 해당 채널({cId})의 영상이 아직 수집되지 않았습니다.
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white px-6 py-3.5 rounded-2xl shadow-xl flex items-center gap-6 border border-slate-700">
+          <span className="text-xs font-bold">
+            총 <strong className="text-rose-400 text-sm">{selectedIds.size}개</strong> 채널 선택됨
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleBulkAddFavorites}
+              className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-xl transition cursor-pointer flex items-center gap-1.5"
+            >
+              <Bookmark size={14} className="fill-white" /> 선택 항목 즐겨찾기 일괄 추가
+            </button>
+            <button
+              type="button"
+              onClick={() => router.push('/favorites')}
+              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition cursor-pointer"
+            >
+              즐겨찾기 폴더 보기
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedIds(new Set())}
+              className="px-3 py-2 text-xs text-slate-400 hover:text-white cursor-pointer"
+            >
+              선택 해제
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
