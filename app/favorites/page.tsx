@@ -3,10 +3,10 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
-  getFavorites, removeFavoriteItem, updateCustomPrice, updateFavoriteFolder, FavoriteItem 
+  getFavorites, removeFavoriteItem, updateFavoriteFolder, FavoriteItem 
 } from '@/lib/favorites';
 import { 
-  Bookmark, Folder, Download, Plus, Trash2, Edit3, Check, X 
+  Bookmark, Folder, Download, Plus, Trash2, Edit3, Check, X, MessageSquare 
 } from 'lucide-react';
 
 export default function FavoritesPage() {
@@ -21,8 +21,10 @@ export default function FavoritesPage() {
   const [newFolderName, setNewFolderName] = useState('');
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [editingPriceId, setEditingPriceId] = useState<string | null>(null);
-  const [tempPrice, setTempPrice] = useState<string>('');
+  
+  // 메모 남기기 편집 상태
+  const [editingMemoId, setEditingMemoId] = useState<string | null>(null);
+  const [tempMemo, setTempMemo] = useState<string>('');
 
   useEffect(() => {
     const loadFavs = () => {
@@ -55,18 +57,27 @@ export default function FavoritesPage() {
   };
 
   const handleRemove = (id: string) => {
-    removeFavoriteItem(id);
+    if (confirm('이 채널을 즐겨찾기에서 삭제하시겠습니까?')) {
+      removeFavoriteItem(id);
+      setFavorites(Object.values(getFavorites()));
+      selectedIds.delete(id);
+      setSelectedIds(new Set(selectedIds));
+    }
+  };
+
+  // 메모 저장 함수 (custom_price 필드를 메모 저장 용도로 활용하거나 별도 관리)
+  const handleSaveMemo = (id: string) => {
+    const favs = getFavorites();
+    if (favs[id]) {
+      favs[id].custom_memo = tempMemo; // 메모 저장
+      localStorage.setItem('findlist_favorites', JSON.stringify(favs));
+      window.dispatchEvent(new Event('favorites-updated'));
+    }
+    setEditingMemoId(null);
     setFavorites(Object.values(getFavorites()));
   };
 
-  const handleSavePrice = (id: string) => {
-    const num = Number(tempPrice.replace(/[^0-9]/g, ''));
-    updateCustomPrice(id, isNaN(num) ? 0 : num);
-    setEditingPriceId(null);
-    setFavorites(Object.values(getFavorites()));
-  };
-
-  // 선택한 채널들 일괄 폴더 이동
+  // 선택한 채널들 일괄 폴더 이동 (상태 즉시 반영)
   const handleBulkMoveFolder = (targetFolder: string) => {
     if (selectedIds.size === 0) return;
     
@@ -91,14 +102,13 @@ export default function FavoritesPage() {
     setNewFolderName('');
   };
 
-  // 폴더 삭제 (삭제 시 해당 폴더에 있던 채널들은 '기본 폴더'로 자동 이동)
+  // 폴더 삭제
   const handleDeleteFolder = (folderToDelete: string) => {
     if (folders.length <= 1) {
       alert('최소 1개의 폴더는 남아있어야 합니다.');
       return;
     }
     if (confirm(`'${folderToDelete}' 폴더를 삭제하시겠습니까? 해당 폴더에 있던 채널들은 '기본 폴더'로 이동됩니다.`)) {
-      // 해당 폴더의 채널들을 '기본 폴더'로 변경
       const allFavs = getFavorites();
       Object.values(allFavs).forEach(item => {
         if ((item.folder || '기본 폴더') === folderToDelete) {
@@ -232,10 +242,10 @@ export default function FavoritesPage() {
         ) : (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
             <div className="overflow-x-auto w-full">
-              <div className="min-w-[750px] divide-y divide-slate-100">
-                {filteredFavorites.map((item) => {
+              <div className="min-w-[800px] divide-y divide-slate-100">
+                {filteredFavorites.map((item: any) => {
                   const isChecked = selectedIds.has(item.id);
-                  const currentPrice = item.custom_price ?? item.base_price ?? 300000;
+                  const currentMemo = item.custom_memo || '';
                   const isYoutube = item.platform === 'youtube';
 
                   return (
@@ -278,7 +288,7 @@ export default function FavoritesPage() {
                         </div>
                       </div>
 
-                      {/* 2. 오른쪽 스크롤 영역: 플랫폼별 맞춤 지표 및 단가 설정/삭제 */}
+                      {/* 2. 오른쪽 스크롤 영역: 플랫폼별 맞춤 지표 및 메모 & 삭제 버튼 */}
                       <div className="flex items-center gap-8 text-xs text-slate-600 flex-1 justify-end pl-4">
                         
                         {/* 플랫폼별 지표 */}
@@ -314,55 +324,56 @@ export default function FavoritesPage() {
                           </>
                         )}
 
-                        {/* 예상 광고 단가 및 수정/삭제 버튼 */}
-                        <div className="flex items-center gap-4 flex-shrink-0 border-l border-slate-100 pl-6">
-                          <div className="text-right w-28">
-                            <span className="text-[10px] text-slate-400 block">예상 광고 단가</span>
-                            {editingPriceId === item.id ? (
-                              <div className="flex items-center gap-1.5 mt-0.5">
+                        {/* 메모장 및 삭제 버튼 */}
+                        <div className="flex items-center gap-3 flex-shrink-0 border-l border-slate-100 pl-6">
+                          <div className="text-left w-36">
+                            <span className="text-[10px] text-slate-400 block mb-0.5">채널 메모</span>
+                            {editingMemoId === item.id ? (
+                              <div className="flex items-center gap-1">
                                 <input 
                                   type="text"
-                                  value={tempPrice}
-                                  onChange={(e) => setTempPrice(e.target.value)}
-                                  placeholder={currentPrice.toString()}
+                                  value={tempMemo}
+                                  onChange={(e) => setTempMemo(e.target.value)}
+                                  placeholder="메모 입력..."
                                   className="w-24 px-2 py-1 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500"
                                 />
                                 <button 
                                   type="button"
-                                  onClick={() => handleSavePrice(item.id)}
-                                  className="px-2 py-1 bg-red-500 text-white rounded-lg text-[11px] font-bold"
+                                  onClick={() => handleSaveMemo(item.id)}
+                                  className="px-2 py-1 bg-red-500 text-white rounded-lg text-[10px] font-bold"
                                 >
                                   저장
                                 </button>
                               </div>
                             ) : (
-                              <strong className="text-xs md:text-sm font-black text-red-600">{currentPrice.toLocaleString()}원</strong>
+                              <div className="flex items-center justify-between gap-1">
+                                <span className="text-xs text-slate-700 truncate max-w-[90px]" title={currentMemo}>
+                                  {currentMemo || <span className="text-slate-300">메모 없음</span>}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingMemoId(item.id);
+                                    setTempMemo(currentMemo);
+                                  }}
+                                  className="p-1 text-slate-400 hover:text-slate-700 transition cursor-pointer"
+                                  title="메모 편집"
+                                >
+                                  <Edit3 size={13} />
+                                </button>
+                              </div>
                             )}
                           </div>
 
-                          <div className="flex items-center gap-1">
-                            {editingPriceId !== item.id && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEditingPriceId(item.id);
-                                  setTempPrice(currentPrice.toString());
-                                }}
-                                className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs transition cursor-pointer"
-                                title="단가 수정"
-                              >
-                                <Edit3 size={14} />
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => handleRemove(item.id)}
-                              className="p-2 bg-slate-100 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-xl text-xs transition cursor-pointer"
-                              title="삭제"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
+                          {/* 휴지통 삭제 버튼 (즐겨찾기에서 제거) */}
+                          <button
+                            type="button"
+                            onClick={() => handleRemove(item.id)}
+                            className="p-2 bg-slate-100 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-xl text-xs transition cursor-pointer"
+                            title="즐겨찾기 삭제"
+                          >
+                            <Trash2 size={15} />
+                          </button>
                         </div>
 
                       </div>
@@ -375,7 +386,7 @@ export default function FavoritesPage() {
         )}
       </div>
 
-      {/* 폴더 관리 모달 (추가 및 삭제 기능 포함) */}
+      {/* 폴더 관리 모달 */}
       {isFolderModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-xs">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl">
@@ -392,7 +403,6 @@ export default function FavoritesPage() {
               </button>
             </div>
 
-            {/* 새 폴더 추가 입력창 */}
             <div className="space-y-2">
               <label className="text-xs font-bold text-slate-600 block">새 폴더 추가</label>
               <div className="flex items-center gap-2">
@@ -413,7 +423,6 @@ export default function FavoritesPage() {
               </div>
             </div>
 
-            {/* 기존 폴더 목록 및 삭제 버튼 */}
             <div className="space-y-2">
               <label className="text-xs font-bold text-slate-600 block">보유 중인 폴더 목록</label>
               <div className="max-h-48 overflow-y-auto space-y-2 divide-y divide-slate-50">
