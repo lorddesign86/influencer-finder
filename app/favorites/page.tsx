@@ -195,7 +195,7 @@ export default function FavoritesPage() {
                     </div>
                   </div>
 
-                  {/* 중앙: 플랫폼별 맞춤 지표 (유튜브 vs 블로그) */}
+                  {/* 중앙: 플랫폼별 맞춤 지표 (유튜브: 구독자/롱폼/숏츠 vs 블로그: 팬/이웃/일방문자) */}
                   <div className="hidden sm:flex items-center gap-6 text-xs text-slate-600 flex-shrink-0">
                     {isYoutube ? (
                       <>
@@ -206,6 +206,10 @@ export default function FavoritesPage() {
                         <div className="text-right">
                           <span className="text-[10px] text-slate-400 block">평균 조회수(롱폼)</span>
                           <strong className="text-red-500 font-black">{(item.metric2 || 0).toLocaleString()}회</strong>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-[10px] text-slate-400 block">평균 조회수(숏츠)</span>
+                          <strong className="text-slate-800 font-black">{(item.metric3 || 0).toLocaleString()}회</strong>
                         </div>
                       </>
                     ) : (
