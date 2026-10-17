@@ -13,7 +13,7 @@ export default function YoutubeSearchPage() {
   const [favoritesMap, setFavoritesMap] = useState<Record<string, any>>({});
   const [isProMode, setIsProMode] = useState(true);
 
-  // 데이터 무결성을 보장하는 안정적인 유튜버 리스트 데이터
+  // 유튜브 전용 데이터 규격 (구독자, 롱폼 조회수, 숏츠 조회수, 광고 단가)
   const [channels, setChannels] = useState([
     {
       id: 'hyojin',
@@ -350,7 +350,7 @@ export default function YoutubeSearchPage() {
 
                 </div>
 
-                {/* 중앙 통계 지표 */}
+                {/* 중앙 통계 지표 (유튜브 고유 지표: 구독자, 롱폼 조회수, 숏츠 조회수, 예상 광고 단가) */}
                 <div className="overflow-x-auto no-scrollbar">
                   <div className="flex items-center gap-3 min-w-[650px] bg-slate-50 p-3 rounded-xl border border-slate-100 text-xs">
                     <div className="flex-1 px-3 py-1.5 bg-white rounded-lg border border-slate-200">
