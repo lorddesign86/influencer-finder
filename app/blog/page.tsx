@@ -1,309 +1,190 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
-import { 
-  getFavorites, toggleFavoriteItem, addBulkFavorites, FavoriteItem 
-} from '@/lib/favorites';
-import { 
-  Search, ChevronRight, Eye, Mail, Bookmark, CheckSquare, Square, Check, Zap, ArrowUpDown 
-} from 'lucide-react';
+import { getFavorites } from '@/lib/favorites';
+import { Bookmark, Check, ExternalLink, Search, SlidersHorizontal } from 'lucide-react';
 
-const BLOG_CATEGORIES = [
-  '전체', '여행', '패션', '뷰티', '푸드', 'IT테크', '자동차', '리빙', '육아', '생활건강', '게임', '동물·펫', '운동·레저', '경제·비즈니스'
-];
-
-type SortOption = 'fans' | 'visitors' | 'neighbors' | 'price';
-
-const cleanId = (val: any): string => {
-  if (!val) return '';
-  return String(val).trim().replace(/^@+/, '');
-};
-
-export default function BlogInfluencerPage() {
+export default function BlogSearchPage() {
   const router = useRouter();
-  const [isProUser, setIsProUser] = useState(false);
-  const [search, setSearch] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('전체');
-  const [sortBy, setSortBy] = useState<SortOption>('fans');
-
-  const [blogs, setBlogs] = useState<any[]>([]);
-  const [postsMap, setPostsMap] = useState<Record<string, any[]>>({});
-  const [matchedPostBlogIds, setMatchedPostBlogIds] = useState<Set<string>>(new Set());
-
-  const [loading, setLoading] = useState(true);
-  const [postsLoading, setPostsLoading] = useState(false);
-
+  const [sortBy, setSortBy] = useState('fan');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [favoritesMap, setFavoritesMap] = useState<Record<string, FavoriteItem>>({});
+  const [favoritesMap, setFavoritesMap] = useState<Record<string, any>>({});
 
-  useEffect(() => {
-    setFavoritesMap(getFavorites());
-    const handleSync = () => setFavoritesMap(getFavorites());
-    window.addEventListener('favorites-updated', handleSync);
-    return () => window.removeEventListener('favorites-updated', handleSync);
-  }, []);
-
-  // 1. 초기 블로그 인플루언서 전체 로드
-  useEffect(() => {
-    const fetchAllBlogs = async () => {
-      setLoading(true);
-      try {
-        let allBlogs: any[] = [];
-        const step = 1000;
-        for (let i = 0; i < 5; i++) {
-          const { data, error } = await supabase
-            .from('blog_influencers')
-            .select('*')
-            .range(i * step, (i + 1) * step - 1);
-
-          if (error) {
-            console.error('블로거 로드 에러:', error);
-            break;
-          }
-          if (data && data.length > 0) {
-            allBlogs = allBlogs.concat(data);
-            if (data.length < step) break;
-          } else {
-            break;
-          }
-        }
-        setBlogs(allBlogs);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchAllBlogs();
-  }, []);
-
-  // 2. 검색어/카테고리 변경 시 blog_posts 역추적
-  useEffect(() => {
-    const keyword = search.trim() || (selectedCategory !== '전체' ? selectedCategory : '');
-    if (!keyword) {
-      setMatchedPostBlogIds(new Set());
-      return;
+  // 샘플 블로그 데이터 (실제 데이터 소스에 맞게 교체 또는 유지)
+  const [channels, setChannels] = useState([
+    {
+      id: 'binaida',
+      blog_id: 'binaida',
+      name: 'zzzbina',
+      handle: 'binaida',
+      category: '질병 치료/예방 전문',
+      profile_img_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+      fan_count: 196000,
+      daily_visitors: 294000,
+      neighbor_count: 0,
+      estimated_price: 3630000,
+      posts: [
+        { title: '뇌졸중', img: 'https://images.unsplash.com/photo-1559757175-5700dde675bc?w=300' },
+        { title: '독감', img: 'https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?w=300' },
+        { title: '배란일', img: 'https://images.unsplash.com/photo-1584516150905-cbf41ede6151?w=300' },
+        { title: '장염', img: 'https://images.unsplash.com/photo-1505751172876-fa1923c5c528?w=300' },
+      ]
+    },
+    {
+      id: 'fff1503',
+      blog_id: 'fff1503',
+      name: 'fff1503',
+      handle: 'fff1503',
+      category: '생활건강 전문블로거',
+      profile_img_url: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150',
+      fan_count: 186000,
+      daily_visitors: 26466,
+      neighbor_count: 0,
+      estimated_price: 920000,
+      posts: [
+        { title: '식물 테라피', img: 'https://images.unsplash.com/photo-1463936575829-25148e1db1b8?w=300' },
+        { title: '홈케어', img: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=300' },
+      ]
     }
+  ]);
 
-    const timer = setTimeout(async () => {
-      try {
-        const mainKw = keyword.split(/\s+/).filter(Boolean)[0];
-        const { data: matchedPosts } = await supabase
-          .from('blog_posts')
-          .select('blog_id, influencer_id')
-          .ilike('title', `%${mainKw}%`)
-          .limit(300);
-
-        if (matchedPosts && matchedPosts.length > 0) {
-          const bidSet = new Set<string>();
-          matchedPosts.forEach((p: any) => {
-            const bid = cleanId(p.blog_id || p.influencer_id).toLowerCase();
-            if (bid) bidSet.add(bid);
-          });
-          setMatchedPostBlogIds(bidSet);
-        } else {
-          setMatchedPostBlogIds(new Set());
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    }, 200);
-
-    return () => clearTimeout(timer);
-  }, [search, selectedCategory]);
-
-  const getBlogMetrics = (item: any) => {
-    const fans = Number(item.fan_count ?? item.follower_count ?? item.follwer_count ?? item.fans ?? 0);
-    const visitors = Number(item.daily_visitors ?? item.avg_visitors ?? item.visitor_count ?? item.avg_views ?? 0);
-    const neighbors = Number(item.neighbor_count ?? item.neighbors ?? item.subscriber_count ?? 0);
-    const price = Number(item.estimated_price ?? item.ad_price ?? item.manuscript_fee ?? (fans > 0 ? Math.round((fans * 3.5 + visitors * 10) / 10000) * 10000 : 300000));
-    return { fans, visitors, neighbors, price };
+  const loadFavorites = () => {
+    setFavoritesMap(getFavorites());
   };
-
-  const displayedBlogs = useMemo(() => {
-    const q = search.trim().toLowerCase();
-
-    const filtered = blogs.filter((item) => {
-      const bIdLower = cleanId(item.blog_id || item.handle || item.id).toLowerCase();
-      const tagsStr = Array.isArray(item.tags) ? item.tags.join(' ') : String(item.tags || '');
-
-      const fullBlogText = [
-        item.name, item.nickname, item.blog_id, item.handle, item.category, item.specialty, item.description, item.bio, tagsStr
-      ].filter(Boolean).join(' ').toLowerCase();
-
-      const isMatchedFromPosts = matchedPostBlogIds.has(bIdLower);
-
-      if (selectedCategory !== '전체') {
-        const catLower = selectedCategory.toLowerCase();
-        const subCats = catLower.split(/[·/]/).filter(Boolean);
-        const catMatch = subCats.some(sc => fullBlogText.includes(sc)) || isMatchedFromPosts;
-        if (!catMatch) return false;
-      }
-
-      if (!q) return true;
-      const keywords = q.split(/\s+/).filter(Boolean);
-      return keywords.some(kw => fullBlogText.includes(kw)) || isMatchedFromPosts;
-    });
-
-    const sorted = [...filtered].sort((a, b) => {
-      const mA = getBlogMetrics(a);
-      const mB = getBlogMetrics(b);
-      if (sortBy === 'fans') return mB.fans - mA.fans;
-      if (sortBy === 'visitors') return mB.visitors - mA.visitors;
-      if (sortBy === 'neighbors') return mB.neighbors - mA.neighbors;
-      if (sortBy === 'price') return mB.price - mA.price;
-      return 0;
-    });
-
-    return {
-      list: sorted.slice(0, 50),
-      totalCount: sorted.length
-    };
-  }, [blogs, search, selectedCategory, sortBy, matchedPostBlogIds]);
 
   useEffect(() => {
-    const fetchPostsForDisplayed = async () => {
-      const targetBlogs = displayedBlogs.list.filter(b => {
-        const key = cleanId(b.blog_id || b.handle || b.id).toLowerCase();
-        return key && !postsMap[key];
-      });
+    loadFavorites();
+    window.addEventListener('favorites-updated', loadFavorites);
+    return () => window.removeEventListener('favorites-updated', loadFavorites);
+  }, []);
 
-      if (targetBlogs.length === 0) return;
+  // 개별 즐겨찾기 토글 핸들러
+  const handleToggleFavorite = (item: any) => {
+    const id = String(item.blog_id || item.id);
+    const key = `blog_${id}`;
+    const favs = getFavorites();
 
-      setPostsLoading(true);
-      try {
-        const newEntries: Record<string, any[]> = {};
-
-        await Promise.all(
-          targetBlogs.map(async (blog) => {
-            const rawBid = cleanId(blog.blog_id || blog.handle || blog.id);
-            const mapKey = rawBid.toLowerCase();
-            if (!mapKey) return;
-
-            const { data: pData } = await supabase
-              .from('blog_posts')
-              .select('*')
-              .eq('blog_id', rawBid)
-              .order('published_at', { ascending: false })
-              .limit(4);
-
-            newEntries[mapKey] = pData && pData.length > 0 ? pData : [];
-          })
-        );
-
-        setPostsMap(prev => ({ ...prev, ...newEntries }));
-      } finally {
-        setPostsLoading(false);
-      }
-    };
-
-    fetchPostsForDisplayed();
-  }, [displayedBlogs.list]);
-
-  const toFavoriteItem = (blog: any): FavoriteItem => {
-    const bId = cleanId(blog.blog_id || blog.handle || blog.id);
-    const { fans, visitors, neighbors, price } = getBlogMetrics(blog);
-    const rawTags = Array.isArray(blog.tags) 
-      ? blog.tags 
-      : (typeof blog.tags === 'string' && blog.tags.trim() !== '' ? blog.tags.split(',') : [blog.category || '전문블로거']);
-
-    return {
-      id: bId,
-      platform: 'blog',
-      name: blog.name || blog.nickname || bId,
-      handle: cleanId(blog.handle || blog.blog_id || bId),
-      profile_img_url: blog.profile_img_url || blog.profile_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-      tags: rawTags.map((t: string) => String(t).trim().replace(/^#+/, '')),
-      metric1: fans,
-      metric2: visitors,
-      metric3: neighbors,
-      base_price: price,
-      added_at: new Date().toISOString()
-    };
+    if (favs[key]) {
+      delete favs[key];
+    } else {
+      favs[key] = {
+        id,
+        platform: 'blog',
+        name: item.name,
+        handle: item.handle,
+        profile_img_url: item.profile_img_url,
+        tags: [item.category],
+        metric1: item.fan_count,
+        metric2: item.daily_visitors,
+        metric3: item.neighbor_count,
+        base_price: item.estimated_price,
+        folder: '기본 폴더',
+        added_at: new Date().toISOString()
+      };
+    }
+    localStorage.setItem('findlist_favorites', JSON.stringify(favs));
+    window.dispatchEvent(new Event('favorites-updated'));
   };
 
-  const toggleSelectBlog = (bId: string) => {
+  // 전체 선택 / 해제
+  const handleToggleSelectAll = () => {
+    if (selectedIds.size === channels.length) {
+      setSelectedIds(new Set());
+    } else {
+      const allIds = new Set(channels.map(c => String(c.blog_id || c.id)));
+      setSelectedIds(allIds);
+    }
+  };
+
+  // 개별 체크박스 토글
+  const handleToggleCheckbox = (id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
-      if (next.has(bId)) next.delete(bId);
-      else next.add(bId);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
 
-  const toggleSelectAllDisplayed = () => {
-    const currentIds = displayedBlogs.list.map(b => cleanId(b.blog_id || b.handle || b.id));
-    const allSelected = currentIds.length > 0 && currentIds.every(id => selectedIds.has(id));
-
-    if (allSelected) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(currentIds));
+  // 상단/하단 일괄 즐겨찾기 추가 버튼
+  const handleBulkFavorite = () => {
+    if (selectedIds.size === 0) {
+      alert('선택된 채널이 없습니다.');
+      return;
     }
-  };
 
-  const handleBulkAddFavorites = () => {
-    const selectedBlogs = blogs.filter(b => selectedIds.has(cleanId(b.blog_id || b.handle || b.id)));
-    const items = selectedBlogs.map(toFavoriteItem);
-    addBulkFavorites(items);
+    const favs = getFavorites();
+    let count = 0;
+
+    channels.forEach(item => {
+      const id = String(item.blog_id || item.id);
+      if (selectedIds.has(id)) {
+        const key = `blog_${id}`;
+        if (!favs[key]) {
+          favs[key] = {
+            id,
+            platform: 'blog',
+            name: item.name,
+            handle: item.handle,
+            profile_img_url: item.profile_img_url,
+            tags: [item.category],
+            metric1: item.fan_count,
+            metric2: item.daily_visitors,
+            metric3: item.neighbor_count,
+            base_price: item.estimated_price,
+            folder: '기본 폴더',
+            added_at: new Date().toISOString()
+          };
+          count++;
+        }
+      }
+    });
+
+    localStorage.setItem('findlist_favorites', JSON.stringify(favs));
+    window.dispatchEvent(new Event('favorites-updated'));
+    alert(`선택한 채널 중 ${count}개가 즐겨찾기에 추가되었습니다.`);
     setSelectedIds(new Set());
-    alert(`${items.length}명의 블로거가 즐겨찾기에 추가되었습니다!`);
   };
-
-  const allDisplayedSelected = displayedBlogs.list.length > 0 && 
-    displayedBlogs.list.every(b => selectedIds.has(cleanId(b.blog_id || b.handle || b.id)));
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[#f8f9fa] overflow-y-auto relative pb-24">
-      {/* 상단 검색 및 카테고리 영역 (모바일 최적화: 검색창 넓히고 여백 축소) */}
-      <div className="bg-white border-b border-slate-200 px-3 md:px-6 py-2.5 sticky top-0 z-20 space-y-2 shadow-2xs">
-        <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-2">
-          
-          {/* 검색창을 전체 너비로 시원하게 확대 */}
-          <div className="relative w-full flex-1">
+      
+      {/* 상단 검색 및 필터 영역 */}
+      <div className="bg-white border-b border-slate-200 px-4 md:px-8 py-4 sticky top-0 z-20 shadow-2xs space-y-3">
+        <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
+          <div className="relative flex-1 max-w-xl">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
             <input 
-              type="text" 
-              placeholder="찾고 싶은 블로그 키워드나 주제를 입력하세요 (예: 화장품, 맛집, 여행)" 
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-xl text-xs md:text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600 transition shadow-inner"
+              type="text"
+              placeholder="찾고 싶은 블로그 키워드나 주제를 입력하세요 (예: 화장품, 맛집, 여행)"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
             />
           </div>
-
-          <div className="flex items-center gap-2 w-full md:w-auto">
+          <div className="flex items-center gap-2">
             <button 
               type="button"
               onClick={() => router.push('/favorites')}
-              className="flex-1 md:flex-initial flex items-center justify-center gap-1 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 px-3.5 py-2.5 rounded-xl transition cursor-pointer whitespace-nowrap"
+              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
             >
-              <Bookmark size={13} className="text-emerald-600 fill-emerald-600" />
-              즐겨찾기 ({Object.keys(favoritesMap).length})
-            </button>
-            <button 
-              type="button"
-              onClick={() => setIsProUser(!isProUser)}
-              className={`flex-1 md:flex-initial text-xs font-bold text-white px-4 py-2.5 rounded-xl transition cursor-pointer shadow-md whitespace-nowrap ${
-                isProUser ? 'bg-gradient-to-r from-emerald-600 to-teal-500' : 'bg-emerald-600 hover:bg-emerald-700'
-              }`}
-            >
-              {isProUser ? '👑 PRO 플랜 이용중' : '🔒 PRO 업그레이드'}
+              <Bookmark size={14} /> 즐겨찾기 ({Object.keys(favoritesMap).length})
             </button>
           </div>
         </div>
 
-        {/* 카테고리 태그 스크롤 */}
-        <div className="max-w-5xl mx-auto flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar">
-          <span className="text-xs font-bold text-slate-400 flex items-center gap-1 flex-shrink-0 mr-1">
-            카테고리:
-          </span>
-          {BLOG_CATEGORIES.map((cat) => (
+        {/* 카테고리 탭 */}
+        <div className="max-w-6xl mx-auto flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-xs">
+          {['전체', '여행', '패션', '뷰티', '푸드', 'IT테크', '자동차', '리빙', '육아', '생활건강', '게임', '동물·펫', '운동·레저', '경제·비즈니스'].map(cat => (
             <button
               key={cat}
               type="button"
               onClick={() => setSelectedCategory(cat)}
-              className={`px-3 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap transition cursor-pointer flex-shrink-0 ${
-                selectedCategory === cat ? 'bg-emerald-600 text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              className={`px-3 py-1.5 rounded-lg font-bold transition whitespace-nowrap cursor-pointer ${
+                selectedCategory === cat ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
               {cat}
@@ -312,258 +193,155 @@ export default function BlogInfluencerPage() {
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto w-full p-3 md:p-6 space-y-3">
-        {/* 정렬 탭 & 잔여 횟수 바 */}
-        <div className="bg-white px-3 py-2.5 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-2 shadow-2xs">
-          <div className="flex items-center gap-1 text-[11px] overflow-x-auto w-full md:w-auto">
-            <span className="font-bold text-slate-400 flex items-center gap-1 mr-1 flex-shrink-0">
-              <ArrowUpDown size={12} /> 정렬:
-            </span>
-            {[
-              { key: 'fans', label: '팬 많은 순' },
-              { key: 'visitors', label: '일방문자 순' },
-              { key: 'neighbors', label: '이웃 순' },
-              { key: 'price', label: '예상 광고비 순' },
-            ].map((opt) => (
-              <button
-                key={opt.key}
-                type="button"
-                onClick={() => setSortBy(opt.key as SortOption)}
-                className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer flex-shrink-0 ${
-                  sortBy === opt.key ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
+      <div className="max-w-6xl mx-auto w-full p-4 md:p-8 space-y-4">
+        
+        {/* 정렬 및 일괄 추가 바 */}
+        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
+              <input 
+                type="checkbox"
+                checked={selectedIds.size === channels.length && channels.length > 0}
+                onChange={handleToggleSelectAll}
+                className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+              />
+              전체 선택 ({selectedIds.size})
+            </label>
+            <span className="text-xs text-slate-400">| 검색 결과 ({channels.length}명)</span>
           </div>
 
-          <div className="flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full">
-            <Zap size={11} className="fill-amber-500 text-amber-500" />
-            <span>{isProUser ? 'PRO 무제한 열람' : '무료 잔여: 3회'}</span>
-          </div>
-        </div>
-
-        {/* 전체 선택 & 카운트 바 */}
-        <div className="text-xs text-slate-500 font-semibold px-2 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={toggleSelectAllDisplayed}
-              className="flex items-center gap-1.5 text-slate-700 hover:text-emerald-600 font-bold cursor-pointer"
+              onClick={handleBulkFavorite}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-xs cursor-pointer"
             >
-              {allDisplayedSelected ? (
-                <CheckSquare size={16} className="text-emerald-600" />
-              ) : (
-                <Square size={16} className="text-slate-400" />
-              )}
-              <span>전체 선택 ({selectedIds.size})</span>
+              <Bookmark size={14} /> 즐겨찾기 추가 ({selectedIds.size})
             </button>
-            <span className="text-slate-300">|</span>
-            <span>검색 결과 ({displayedBlogs.totalCount}명)</span>
           </div>
-
-          {selectedIds.size > 0 && (
-            <button
-              type="button"
-              onClick={handleBulkAddFavorites}
-              className="flex items-center gap-1 px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition cursor-pointer"
-            >
-              <Bookmark size={12} /> 즐겨찾기 추가 ({selectedIds.size})
-            </button>
-          )}
         </div>
 
-        {/* 블로그 리스트 (모바일 최적화 세로형/그리드 배치) */}
-        {loading ? (
-          <div className="p-16 text-center text-xs text-slate-400 bg-white rounded-2xl border border-slate-200">
-            블로그 인플루언서 목록을 불러오는 중입니다...
-          </div>
-        ) : displayedBlogs.list.length === 0 ? (
-          <div className="p-16 text-center text-xs text-slate-400 bg-white rounded-2xl border border-slate-200">
-            조건에 일치하는 블로그 인플루언서가 없습니다.
-          </div>
-        ) : (
-          displayedBlogs.list.map((blog) => {
-            const bId = cleanId(blog.blog_id || blog.handle || blog.id);
-            const bIdKey = bId.toLowerCase();
-            const pList = postsMap[bIdKey] || [];
-            const isBlogPostLoaded = bIdKey in postsMap;
-
-            const isChecked = selectedIds.has(bId);
-            const favKey = `blog_${bId}`;
-            const isFavorited = Boolean(favoritesMap[favKey]);
-
-            const { fans, visitors, neighbors, price } = getBlogMetrics(blog);
-            const customPrice = favoritesMap[favKey]?.custom_price;
-
-            const profileImg = blog.profile_img_url || blog.profile_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150';
-            const rawTags = Array.isArray(blog.tags) 
-              ? blog.tags 
-              : (typeof blog.tags === 'string' && blog.tags.trim() !== '' ? blog.tags.split(',') : [`${blog.category || '생활건강'} 전문블로거`]);
+        {/* 블로그 카드 리스트 */}
+        <div className="space-y-4">
+          {channels.map((item) => {
+            const id = String(item.blog_id || item.id);
+            const isChecked = selectedIds.has(id);
+            const isFav = Boolean(favoritesMap[`blog_${id}`]);
 
             return (
               <div 
-                key={blog.id || bId}
-                className={`bg-white rounded-2xl border p-4 md:p-5 shadow-2xs hover:shadow-md transition space-y-3 ${
-                  isChecked ? 'border-emerald-600 ring-2 ring-emerald-100' : 'border-slate-200'
+                key={id}
+                className={`bg-white rounded-2xl border transition p-4 md:p-6 space-y-4 shadow-2xs ${
+                  isChecked ? 'border-emerald-500 bg-emerald-50/10' : 'border-slate-200'
                 }`}
               >
-                {/* 상단 프로필 영역 */}
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => toggleSelectBlog(bId)}
-                    className={`w-5 h-5 rounded-md flex items-center justify-center border transition cursor-pointer flex-shrink-0 ${
-                      isChecked ? 'bg-emerald-600 border-emerald-600 text-white' : 'bg-white border-slate-300 hover:border-emerald-600'
-                    }`}
-                  >
-                    {isChecked && <Check size={13} strokeWidth={3} />}
-                  </button>
-
-                  <img 
-                    src={profileImg} 
-                    alt="" 
-                    referrerPolicy="no-referrer"
-                    className="w-11 h-11 md:w-13 md:h-13 rounded-full border border-slate-200 object-cover flex-shrink-0"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <h3 className="text-xs md:text-sm font-bold text-slate-900 truncate">{blog.name || blog.nickname || bId}</h3>
-                      <span className="text-[9px] px-1.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 font-extrabold rounded">
-                        INFLUENCER
+                {/* 상단 프로필 및 우측 액션 버튼 배치 */}
+                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                  
+                  {/* 좌측: 체크박스 + 프로필 사진 & 이름 */}
+                  <div className="flex items-center gap-3 min-w-0">
+                    <input 
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => handleToggleCheckbox(id)}
+                      className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer flex-shrink-0"
+                    />
+                    <img 
+                      src={item.profile_img_url} 
+                      alt="" 
+                      className="w-12 h-12 rounded-full border border-slate-200 object-cover flex-shrink-0"
+                    />
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="text-sm md:text-base font-black text-slate-900 truncate">{item.name}</h3>
+                        <span className="text-[10px] px-2 py-0.5 font-extrabold rounded bg-emerald-50 text-emerald-700 border border-emerald-100">
+                          INFLUENCER
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 truncate">@{item.handle}</p>
+                      <span className="inline-block mt-1 text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
+                        #{item.category}
                       </span>
                     </div>
-                    <p className="text-[10px] md:text-xs text-slate-400 truncate">@{cleanId(blog.handle || blog.blog_id || bId)}</p>
                   </div>
+
+                  {/* 우측: [즐겨찾기] / [광고문의] / [채널상세] 버튼 (상단으로 배치) */}
+                  <div className="flex items-center gap-2 w-full md:w-auto">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleFavorite(item)}
+                      className={`flex-1 md:flex-initial px-4 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border cursor-pointer ${
+                        isFav 
+                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs' 
+                          : 'bg-white text-slate-700 border-slate-300 hover:border-emerald-500 hover:text-emerald-600'
+                      }`}
+                    >
+                      <Bookmark size={14} className={isFav ? 'fill-white' : ''} />
+                      {isFav ? '저장됨' : '즐겨찾기'}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => alert('광고문의 기능')}
+                      className="flex-1 md:flex-initial px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      광고문의
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/blog/${id}`)}
+                      className="flex-1 md:flex-initial px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer shadow-xs whitespace-nowrap"
+                    >
+                      채널상세 <span className="text-xs">&gt;</span>
+                    </button>
+                  </div>
+
                 </div>
 
-                {/* 태그 영역 */}
-                <div className="flex flex-wrap gap-1 max-h-12 overflow-y-auto">
-                  {rawTags.map((t: string, i: number) => (
-                    <span key={i} className="text-[9px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 whitespace-nowrap">
-                      #{String(t).trim().replace(/^#+/, '')}
-                    </span>
-                  ))}
-                </div>
-
-                {/* 모바일에서 깨지지 않는 3분할 액션 버튼 */}
-                <div className="grid grid-cols-3 gap-1.5 text-xs font-bold">
-                  <button
-                    type="button"
-                    onClick={() => toggleFavoriteItem(toFavoriteItem(blog))}
-                    className={`py-2 px-1 border rounded-xl transition flex items-center justify-center gap-1 truncate ${
-                      isFavorited ? 'bg-amber-50 text-amber-700 border-amber-300' : 'bg-slate-50 text-slate-700 border-slate-200'
-                    }`}
-                  >
-                    <Bookmark size={12} className={isFavorited ? 'fill-amber-500 text-amber-500' : ''} />
-                    {isFavorited ? '저장됨' : '즐겨찾기'}
-                  </button>
-
-                  <a
-                    href={`mailto:${blog.contact_email || `${bId}@naver.com`}?subject=[블로그 원고/협업문의] ${blog.name || bId} 인플루언서님께`}
-                    className="py-2 px-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl transition flex items-center justify-center gap-1 truncate"
-                  >
-                    <Mail size={12} /> 광고문의
-                  </a>
-
-                  <button
-                    type="button"
-                    onClick={() => router.push(`/blog/${bId}`)}
-                    className="py-2 px-1 bg-slate-900 hover:bg-slate-800 text-white rounded-xl transition shadow-xs flex items-center justify-center gap-1 truncate"
-                  >
-                    채널상세 <ChevronRight size={12} />
-                  </button>
-                </div>
-
-                {/* 블로그 핵심 지표 2x2 그리드 */}
-                <div className="grid grid-cols-2 gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-100 text-xs">
-                  <div className="bg-white p-2.5 rounded-lg border border-slate-100">
-                    <span className="text-[10px] text-slate-400 block">인플루언서 팬</span>
-                    <p className="text-xs font-black text-slate-900 mt-0.5">{fans.toLocaleString()}명</p>
-                  </div>
-                  <div className="bg-white p-2.5 rounded-lg border border-slate-100">
-                    <span className="text-[10px] text-slate-400 block">일일 평균 방문자</span>
-                    <p className="text-xs font-black text-emerald-600 mt-0.5">{visitors.toLocaleString()}명</p>
-                  </div>
-                  <div className="bg-white p-2.5 rounded-lg border border-slate-100">
-                    <span className="text-[10px] text-slate-400 block">이웃 수</span>
-                    <p className="text-xs font-black text-slate-900 mt-0.5">{neighbors.toLocaleString()}명</p>
-                  </div>
-                  <div className="bg-white p-2.5 rounded-lg border border-slate-100">
-                    <span className="text-[10px] text-slate-400 block">예상 원고료</span>
-                    <p className="text-xs font-black text-emerald-600 mt-0.5">
-                      {customPrice != null ? `${Number(customPrice).toLocaleString()}원` : `${price.toLocaleString()}원`}
-                    </p>
-                  </div>
-                </div>
-
-                {/* 최근 발행 콘텐츠 (썸네일 그리드) */}
-                <div className="space-y-1">
-                  <p className="text-[11px] font-bold text-slate-400">최근 발행 콘텐츠</p>
-                  {pList.length > 0 ? (
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                      {pList.map((p: any, i: number) => {
-                        const thumb = p.thumbnail_url || p.thumbnail || p.image_url || 'https://images.unsplash.com/photo-1499750310107-5fef28a66643?w=300';
-                        const title = p.title || p.post_title || '블로그 포스팅';
-
-                        return (
-                          <a 
-                            key={i} 
-                            href={p.post_url || p.url || `https://blog.naver.com/${bId}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="group relative block rounded-xl border border-slate-100 overflow-hidden bg-slate-100 aspect-video"
-                          >
-                            <img src={thumb} alt="" className="w-full h-full object-cover group-hover:scale-105 transition duration-300" referrerPolicy="no-referrer" />
-                            <div className="absolute inset-0 bg-black/75 backdrop-blur-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-center items-center text-center p-2 text-white space-y-1">
-                              <p className="text-[10px] font-bold line-clamp-2 px-1">{title}</p>
-                              <span className="text-[9px] text-emerald-300 flex items-center gap-0.5"><Eye size={9} /> 보러가기</span>
-                            </div>
-                          </a>
-                        );
-                      })}
+                {/* 중앙: 통계 지표 4칸을 한 줄로 압축 (모바일 좌우 스크롤 지원) */}
+                <div className="overflow-x-auto no-scrollbar">
+                  <div className="flex items-center gap-3 min-w-[650px] bg-slate-50 p-3 rounded-xl border border-slate-100 text-xs">
+                    <div className="flex-1 px-3 py-1.5 bg-white rounded-lg border border-slate-200">
+                      <span className="text-[10px] text-slate-400 block">인플루언서 팬</span>
+                      <strong className="text-slate-900 font-black">{item.fan_count.toLocaleString()}명</strong>
                     </div>
-                  ) : !isBlogPostLoaded && postsLoading ? (
-                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-center text-xs text-slate-400">
-                      최근 발행 포스팅 불러오는 중...
+                    <div className="flex-1 px-3 py-1.5 bg-white rounded-lg border border-slate-200">
+                      <span className="text-[10px] text-slate-400 block">일일 평균 방문자</span>
+                      <strong className="text-emerald-600 font-black">{item.daily_visitors.toLocaleString()}명</strong>
                     </div>
-                  ) : (
-                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-center text-xs text-slate-400">
-                      등록된 포스팅 썸네일이 없습니다.
+                    <div className="flex-1 px-3 py-1.5 bg-white rounded-lg border border-slate-200">
+                      <span className="text-[10px] text-slate-400 block">이웃 수</span>
+                      <strong className="text-slate-900 font-black">{item.neighbor_count.toLocaleString()}명</strong>
                     </div>
-                  )}
+                    <div className="flex-1 px-3 py-1.5 bg-white rounded-lg border border-slate-200">
+                      <span className="text-[10px] text-slate-400 block">예상 원고료</span>
+                      <strong className="text-red-600 font-black">{item.estimated_price.toLocaleString()}원</strong>
+                    </div>
+                  </div>
                 </div>
+
+                {/* 하단: 최근 발행 콘텐츠 썸네일 */}
+                <div className="space-y-2">
+                  <span className="text-xs font-bold text-slate-500 block">최근 발행 콘텐츠</span>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    {item.posts.map((post, idx) => (
+                      <div key={idx} className="group relative rounded-xl overflow-hidden border border-slate-200 aspect-video bg-slate-100">
+                        <img src={post.img} alt={post.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-2 pt-4">
+                          <p className="text-[11px] text-white font-bold truncate">{post.title}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
               </div>
             );
-          })
-        )}
-      </div>
-
-      {/* 하단 플로팅 다중 선택 액션 바 */}
-      {selectedIds.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white px-4 md:px-6 py-3 rounded-2xl shadow-xl flex items-center gap-3 md:gap-6 border border-slate-700 text-xs">
-          <span className="font-bold">
-            선택 <strong className="text-emerald-400">{selectedIds.size}명</strong>
-          </span>
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={handleBulkAddFavorites}
-              className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition cursor-pointer"
-            >
-              즐겨찾기 추가
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedIds(new Set())}
-              className="px-2.5 py-2 text-slate-400 hover:text-white cursor-pointer"
-            >
-              취소
-            </button>
-          </div>
+          })}
         </div>
-      )}
+
+      </div>
     </div>
   );
 }
