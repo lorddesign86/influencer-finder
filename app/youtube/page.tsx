@@ -42,7 +42,7 @@ export default function YoutubeInfluencerPage() {
     return () => window.removeEventListener('favorites-updated', handleSync);
   }, []);
 
-  // Supabase 데이터 로드 (필요시 .from('실제테이블명')으로 변경하세요)
+  // 원래 사용하시던 'influencers' 테이블에서 데이터 로드
   useEffect(() => {
     const fetchChannels = async () => {
       setLoading(true);
@@ -52,7 +52,7 @@ export default function YoutubeInfluencerPage() {
         const step = 1000;
         for (let i = 0; i < 5; i++) {
           const { data, error } = await supabase
-            .from('channels') // 💡 에러가 난 'youtube_influencers' 대신 'channels'로 변경함 (필요시 실제 테이블명으로 수정)
+            .from('influencers') // 원래 사용하던 올바른 테이블명
             .select('*')
             .range(i * step, (i + 1) * step - 1);
 
@@ -149,7 +149,7 @@ export default function YoutubeInfluencerPage() {
   return (
     <div className="flex-1 flex flex-col h-full bg-[#f8f9fa] overflow-y-auto relative pb-24">
       
-      {/* 상단 검색 영역 */}
+      {/* 상단 검색 영역 (모바일 최적화 및 검색창 확대) */}
       <div className="bg-white border-b border-slate-200 px-3 md:px-6 py-2.5 sticky top-0 z-20 space-y-2 shadow-2xs">
         <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-2">
           <div className="relative w-full flex-1">
@@ -228,7 +228,7 @@ export default function YoutubeInfluencerPage() {
           <span className="text-[11px] font-bold text-slate-500">검색 결과: {displayedChannels.totalCount}개</span>
         </div>
 
-        {/* 데이터베이스 에러 발생 시 화면에 안내 표시 */}
+        {/* 데이터베이스 에러 발생 시 안내 */}
         {dbError && (
           <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-600 text-xs flex items-center gap-2">
             <AlertCircle size={16} className="flex-shrink-0" />
@@ -239,7 +239,7 @@ export default function YoutubeInfluencerPage() {
           </div>
         )}
 
-        {/* 유튜버 리스트 카드 영역 */}
+        {/* 유튜버 리스트 카드 영역 (모바일 세로형 및 2x2 그리드) */}
         {loading ? (
           <div className="p-16 text-center text-xs text-slate-400 bg-white rounded-2xl border border-slate-200">
             유튜버 목록을 불러오는 중입니다...
