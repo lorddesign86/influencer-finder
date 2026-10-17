@@ -4,14 +4,16 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { 
-  Search, Tag, ChevronRight, Eye, Lock, Sparkles, Mail 
+  getFavorites, toggleFavoriteItem, addBulkFavorites, FavoriteItem 
+} from '@/lib/favorites';
+import { 
+  Search, Tag, ChevronRight, Eye, Lock, Sparkles, Mail, Bookmark, CheckSquare, Square, Check 
 } from 'lucide-react';
 
 const YOUTUBE_CATEGORIES = [
   '전체', '맛집', '먹방', '여행', 'Vlog', 'IT', '뷰티', '패션', '게임', '경제'
 ];
 
-// 채널 ID 정규화 헬퍼 (앞뒤 공백 및 앞에 붙은 @ 제거)
 const cleanId = (val: any): string => {
   if (!val) return '';
   return String(val).trim().replace(/^@+/, '');
@@ -30,7 +32,18 @@ export default function YoutubeDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [postsLoading, setPostsLoading] = useState(false);
 
-  // 1. 초기 채널 전체 로드 (500개 제한 해제 -> 다중 페이지로 전체 채널 안전하게 확보)
+  // ★ 체크박스 다중 선택 및 즐겨찾기 상태
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [favoritesMap, setFavoritesMap] = useState<Record<string, FavoriteItem>>({});
+
+  useEffect(() => {
+    setFavoritesMap(getFavorites());
+    const handleSync = () => setFavoritesMap(getFavorites());
+    window.addEventListener('favorites-updated', handleSync);
+    return () => window.removeEventListener('favorites-updated', handleSync);
+  }, []);
+
+  // 1. 초기 채널 전체 로드
   useEffect(() => {
     const fetchAllChannels = async () => {
       setLoading(true);
@@ -43,10 +56,7 @@ export default function YoutubeDashboardPage() {
             .select('*')
             .range(i * step, (i + 1) * step - 1);
 
-          if (error) {
-            console.error('채널 로드 에러:', error);
-            break;
-          }
+          if (error) break;
           if (data && data.length > 0) {
             allChannels = allChannels.concat(data);
             if (data.length < step) break;
@@ -55,8 +65,6 @@ export default function YoutubeDashboardPage() {
           }
         }
         setChannels(allChannels);
-      } catch (err) {
-        console.error('예외 발생:', err);
       } finally {
         setLoading(false);
       }
@@ -64,7 +72,7 @@ export default function YoutubeDashboardPage() {
     fetchAllChannels();
   }, []);
 
-  // 2. 검색어 또는 카테고리 변경 시: `influencer_posts`의 영상 제목(title)까지 검색하여 채널 ID 역추적
+  // 2. 검색어/태그 입력 시 영상 제목(title) 역추적
   useEffect(() => {
     const keyword = search.trim() || (selectedTag !== '전체' ? selectedTag : '');
     if (!keyword) {
@@ -74,14 +82,11 @@ export default function YoutubeDashboardPage() {
 
     const timer = setTimeout(async () => {
       try {
-        const keywords = keyword.split(/\s+/).filter(Boolean);
-        // 첫 번째 핵심 키워드로 최신 영상 제목 및 설명 검색
-        const mainKw = keywords[0];
+        const mainKw = keyword.split(/\s+/).filter(Boolean)[0];
         const { data: matchedPosts } = await supabase
           .from('influencer_posts')
-          .select('channel_id, title, thumbnail_url, view_count, published_at')
+          .select('channel_id')
           .ilike('title', `%${mainKw}%`)
-          .order('published_at', { ascending: false })
           .limit(300);
 
         if (matchedPosts && matchedPosts.length > 0) {
@@ -95,14 +100,14 @@ export default function YoutubeDashboardPage() {
           setMatchedPostChannelIds(new Set());
         }
       } catch (err) {
-        console.error('포스트 키워드 역추적 에러:', err);
+        console.error(err);
       }
     }, 200);
 
     return () => clearTimeout(timer);
   }, [search, selectedTag]);
 
-  // 3. 채널 필터링 (채널 모든 텍스트 필드 + 역추적된 영상 제목 매칭 채널 통합)
+  // 3. 채널 필터링
   const displayedChannels = useMemo(() => {
     const q = search.trim().toLowerCase();
     
@@ -113,7 +118,6 @@ export default function YoutubeDashboardPage() {
 
     const targetList = youtubeChannels.length > 0 ? youtubeChannels : channels;
 
-    // 검색어와 태그가 모두 없을 때만 기본 베스트 5 노출
     if (!q && selectedTag === '전체') {
       const sorted = [...targetList].sort((a, b) => {
         const subA = Number(a.follower_count ?? a.follwer_count ?? a.subscriber_count ?? a.subscribers ?? 0);
@@ -126,57 +130,34 @@ export default function YoutubeDashboardPage() {
     const filtered = targetList.filter((item) => {
       const cIdLower = cleanId(item.channel_id).toLowerCase();
       const handleLower = cleanId(item.handle).toLowerCase();
-
-      // 채널의 모든 텍스트 정보 통합 문자열 생성 (이름, 핸들, 카테고리, 소개글, 태그 등)
-      const tagsStr = Array.isArray(item.tags) 
-        ? item.tags.join(' ') 
-        : String(item.tags || '');
+      const tagsStr = Array.isArray(item.tags) ? item.tags.join(' ') : String(item.tags || '');
       
       const fullChannelText = [
-        item.name,
-        item.handle,
-        item.channel_id,
-        item.category,
-        item.description,
-        item.bio,
-        item.keywords,
-        tagsStr
+        item.name, item.handle, item.channel_id, item.category, item.description, item.bio, tagsStr
       ].filter(Boolean).join(' ').toLowerCase();
 
-      // 영상 제목에서 매칭된 채널인지 확인
       const isMatchedFromPosts = matchedPostChannelIds.has(cIdLower) || matchedPostChannelIds.has(handleLower);
 
-      // 카테고리 태그 필터 확인
       if (selectedTag !== '전체') {
         const catLower = selectedTag.toLowerCase();
-        const catMatch = fullChannelText.includes(catLower) || isMatchedFromPosts;
-        if (!catMatch) return false;
+        if (!fullChannelText.includes(catLower) && !isMatchedFromPosts) return false;
       }
 
-      // 검색어 필터 확인
       if (!q) return true;
-
       const keywords = q.split(/\s+/).filter(Boolean);
-      const textMatch = keywords.some(kw => fullChannelText.includes(kw));
-
-      return textMatch || isMatchedFromPosts;
+      return keywords.some(kw => fullChannelText.includes(kw)) || isMatchedFromPosts;
     });
 
-    // 구독자 순으로 정렬하여 상위 결과부터 노출
     const sortedFiltered = [...filtered].sort((a, b) => {
       const subA = Number(a.follower_count ?? a.follwer_count ?? a.subscriber_count ?? a.subscribers ?? 0);
       const subB = Number(b.follower_count ?? b.follwer_count ?? b.subscriber_count ?? b.subscribers ?? 0);
       return subB - subA;
     });
 
-    return { 
-      list: sortedFiltered.slice(0, 50), // 최대 50개까지 넉넉하게 렌더링
-      totalCount: sortedFiltered.length, 
-      isDefaultRecommend: false 
-    };
+    return { list: sortedFiltered.slice(0, 50), totalCount: sortedFiltered.length, isDefaultRecommend: false };
   }, [channels, search, selectedTag, matchedPostChannelIds]);
 
-  // 4. 현재 화면에 노출된 채널들의 최신 영상 4개씩만 개별 병렬 조회 (.in()의 1000개 잘림 현상 완벽 해결)
+  // 4. 노출된 채널의 최신 영상 4개 개별 병렬 조회
   useEffect(() => {
     const fetchPostsForDisplayed = async () => {
       const targetChannels = displayedChannels.list.filter(c => {
@@ -189,8 +170,6 @@ export default function YoutubeDashboardPage() {
       setPostsLoading(true);
       try {
         const newEntries: Record<string, any[]> = {};
-
-        // 화면에 보이는 채널들에 대해서만 각각 최신 4개씩 핀포인트 병렬 쿼리
         await Promise.all(
           targetChannels.map(async (channel) => {
             const rawCid = String(channel.channel_id || '').trim();
@@ -198,7 +177,6 @@ export default function YoutubeDashboardPage() {
             const mapKey = cleanedCid.toLowerCase();
             if (!mapKey) return;
 
-            // 원본 ID와 @ 제거 ID 모두 대응
             const candidateIds = Array.from(new Set([rawCid, cleanedCid, `@${cleanedCid}`])).filter(Boolean);
 
             const { data: pData } = await supabase
@@ -211,25 +189,79 @@ export default function YoutubeDashboardPage() {
             newEntries[mapKey] = pData && pData.length > 0 ? pData : [];
           })
         );
-
         setPostsMap(prev => ({ ...prev, ...newEntries }));
-      } catch (err) {
-        console.error('개별 포스트 로드 에러:', err);
       } finally {
         setPostsLoading(false);
       }
     };
-
     fetchPostsForDisplayed();
   }, [displayedChannels.list]);
+
+  // 채널 객체를 FavoriteItem 포맷으로 변환
+  const toFavoriteItem = (channel: any): FavoriteItem => {
+    const cId = cleanId(channel.channel_id || channel.id);
+    const subs = Number(channel.follower_count ?? channel.follwer_count ?? channel.subscriber_count ?? channel.subscribers ?? 0);
+    const longFormViews = Number(channel.avg_video_views ?? channel.avg_views ?? 0);
+    const shortFormViews = Number(channel.avg_shorts_views ?? 0);
+    const estPrice = Number(channel.estimated_video_cpv_price ?? channel.ad_price ?? 0);
+    const tagsList = Array.isArray(channel.tags) ? channel.tags : (typeof channel.tags === 'string' && channel.tags.trim() !== '' ? channel.tags.split(',') : ['크리에이터']);
+
+    return {
+      id: cId,
+      platform: 'youtube',
+      name: channel.name || '이름 없음',
+      handle: cleanId(channel.handle || channel.channel_id),
+      profile_img_url: channel.profile_img_url || channel.profile_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+      tags: tagsList.map((t: string) => String(t).trim().replace(/^#+/, '')),
+      metric1: subs,
+      metric2: longFormViews,
+      metric3: shortFormViews,
+      base_price: estPrice,
+      added_at: new Date().toISOString()
+    };
+  };
+
+  // 체크박스 개별 토글
+  const toggleSelectChannel = (cId: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(cId)) next.delete(cId);
+      else next.add(cId);
+      return next;
+    });
+  };
+
+  // 현재 노출된 리스트 전체 선택/해제
+  const toggleSelectAllDisplayed = () => {
+    const currentIds = displayedChannels.list.map(c => cleanId(c.channel_id || c.id));
+    const allSelected = currentIds.length > 0 && currentIds.every(id => selectedIds.has(id));
+
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(currentIds));
+    }
+  };
+
+  // 선택한 채널 일괄 즐겨찾기 저장
+  const handleBulkAddFavorites = () => {
+    const selectedChannels = channels.filter(c => selectedIds.has(cleanId(c.channel_id || c.id)));
+    const items = selectedChannels.map(toFavoriteItem);
+    addBulkFavorites(items);
+    setSelectedIds(new Set());
+    alert(`${items.length}개의 채널이 즐겨찾기에 추가되었습니다!`);
+  };
 
   const handleOpenDetail = (channel: any) => {
     const targetId = cleanId(channel.channel_id) || channel.id;
     router.push(`/youtube/${targetId}`);
   };
 
+  const allDisplayedSelected = displayedChannels.list.length > 0 && 
+    displayedChannels.list.every(c => selectedIds.has(cleanId(c.channel_id || c.id)));
+
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#f8f9fa] overflow-y-auto">
+    <div className="flex-1 flex flex-col h-full bg-[#f8f9fa] overflow-y-auto relative pb-24">
       <div className="bg-white border-b border-slate-200 px-8 py-6 sticky top-0 z-20 space-y-4 shadow-2xs">
         <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
           <div className="relative flex-1">
@@ -242,6 +274,14 @@ export default function YoutubeDashboardPage() {
               className="w-full pl-12 pr-4 py-3 border border-slate-200 rounded-full text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500 transition shadow-inner"
             />
           </div>
+          <button 
+            type="button"
+            onClick={() => router.push('/favorites')}
+            className="flex items-center gap-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 px-4 py-3 rounded-full transition cursor-pointer whitespace-nowrap"
+          >
+            <Bookmark size={14} className="text-red-600 fill-red-600" />
+            즐겨찾기 ({Object.keys(favoritesMap).length})
+          </button>
           <button 
             type="button"
             onClick={() => setIsProUser(!isProUser)}
@@ -279,14 +319,38 @@ export default function YoutubeDashboardPage() {
               <Sparkles size={16} className="text-red-600" />
               <span>실시간 추천 대형 유튜버 파워 채널 베스트 5 (총 로드된 채널: {channels.length}개)</span>
             </div>
-            <span className="text-[11px] text-red-600 font-semibold">검색창에서 원하는 크리에이터나 키워드를 검색해 보세요!</span>
+            <span className="text-[11px] text-red-600 font-semibold">체크박스를 선택해 원하는 채널을 즐겨찾기에 한 번에 담아보세요!</span>
           </div>
         )}
 
-        <div className="text-xs text-slate-500 font-semibold px-1 flex items-center justify-between">
-          <span>
-            검색된 유튜브 크리에이터 ({displayedChannels.totalCount}명 중 상위 {displayedChannels.list.length}명 표시)
-          </span>
+        {/* 상단 전체 선택 컨트롤 바 */}
+        <div className="text-xs text-slate-500 font-semibold px-2 flex items-center justify-between bg-white py-3 rounded-xl border border-slate-200">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={toggleSelectAllDisplayed}
+              className="flex items-center gap-2 text-slate-700 hover:text-red-600 font-bold cursor-pointer"
+            >
+              {allDisplayedSelected ? (
+                <CheckSquare size={18} className="text-red-600" />
+              ) : (
+                <Square size={18} className="text-slate-400" />
+              )}
+              <span>전체 선택 ({selectedIds.size}개 선택됨)</span>
+            </button>
+            <span className="text-slate-300">|</span>
+            <span>검색된 크리에이터 ({displayedChannels.totalCount}명 중 {displayedChannels.list.length}명 표시)</span>
+          </div>
+
+          {selectedIds.size > 0 && (
+            <button
+              type="button"
+              onClick={handleBulkAddFavorites}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition cursor-pointer shadow-xs"
+            >
+              <Bookmark size={13} /> 선택 채널 즐겨찾기 추가 ({selectedIds.size})
+            </button>
+          )}
         </div>
 
         {loading ? (
@@ -299,14 +363,20 @@ export default function YoutubeDashboardPage() {
           </div>
         ) : (
           displayedChannels.list.map((channel) => {
-            const cIdKey = cleanId(channel.channel_id).toLowerCase();
+            const cId = cleanId(channel.channel_id || channel.id);
+            const cIdKey = cId.toLowerCase();
             const pList = postsMap[cIdKey] || [];
             const isChannelPostLoaded = cIdKey in postsMap;
+
+            const isChecked = selectedIds.has(cId);
+            const favKey = `youtube_${cId}`;
+            const isFavorited = Boolean(favoritesMap[favKey]);
 
             const subs = Number(channel.follower_count ?? channel.follwer_count ?? channel.subscriber_count ?? channel.subscribers ?? 0);
             const longFormViews = Number(channel.avg_video_views ?? channel.avg_views ?? 0);
             const shortFormViews = Number(channel.avg_shorts_views ?? 0);
             const estPrice = Number(channel.estimated_video_cpv_price ?? channel.ad_price ?? 0);
+            const customPrice = favoritesMap[favKey]?.custom_price;
 
             const profileImg = channel.profile_img_url || channel.profile_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150';
             const tagsList = Array.isArray(channel.tags) ? channel.tags : (typeof channel.tags === 'string' && channel.tags.trim() !== '' ? channel.tags.split(',') : ['크리에이터']);
@@ -314,15 +384,31 @@ export default function YoutubeDashboardPage() {
             return (
               <div 
                 key={channel.id || channel.channel_id}
-                className="bg-white rounded-2xl border border-slate-200 p-6 shadow-2xs hover:shadow-md transition space-y-4"
+                className={`bg-white rounded-2xl border p-6 shadow-2xs hover:shadow-md transition space-y-4 ${
+                  isChecked ? 'border-red-500 ring-2 ring-red-100' : 'border-slate-200'
+                }`}
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-start gap-3.5 min-w-0 flex-1">
+                    {/* ★ 요청하신 프로필 좌측 체크박스 */}
+                    <button
+                      type="button"
+                      onClick={() => toggleSelectChannel(cId)}
+                      className={`mt-4 w-5 h-5 rounded-md flex items-center justify-center border transition cursor-pointer flex-shrink-0 ${
+                        isChecked 
+                          ? 'bg-red-600 border-red-600 text-white' 
+                          : 'bg-white border-slate-300 hover:border-red-500'
+                      }`}
+                    >
+                      {isChecked && <Check size={14} strokeWidth={3} />}
+                    </button>
+
                     <img 
                       src={profileImg} 
                       alt={channel.name} 
                       referrerPolicy="no-referrer"
-                      className="w-14 h-14 rounded-full border border-slate-200 object-cover flex-shrink-0"
+                      onClick={() => toggleSelectChannel(cId)}
+                      className="w-14 h-14 rounded-full border border-slate-200 object-cover flex-shrink-0 cursor-pointer"
                     />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
@@ -344,6 +430,21 @@ export default function YoutubeDashboardPage() {
                   </div>
 
                   <div className="flex items-center gap-2 flex-shrink-0">
+                    {/* 개별 즐겨찾기 토글 버튼 */}
+                    <button
+                      type="button"
+                      onClick={() => toggleFavoriteItem(toFavoriteItem(channel))}
+                      className={`flex items-center gap-1 px-3 py-2 border text-xs font-bold rounded-xl transition cursor-pointer whitespace-nowrap ${
+                        isFavorited
+                          ? 'bg-amber-50 text-amber-700 border-amber-300'
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                      }`}
+                      title="즐겨찾기 추가/해제"
+                    >
+                      <Bookmark size={13} className={isFavorited ? 'fill-amber-500 text-amber-500' : ''} />
+                      {isFavorited ? '저장됨' : '즐겨찾기'}
+                    </button>
+
                     <a
                       href={`mailto:${channel.contact_email || 'contact@findlist.co.kr'}?subject=[유튜브 협업문의] ${channel.name} 채널 광고 문의`}
                       className="flex items-center gap-1 px-4 py-2 bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 text-xs font-bold rounded-xl transition cursor-pointer whitespace-nowrap"
@@ -371,85 +472,4 @@ export default function YoutubeDashboardPage() {
                   </div>
                   <div>
                     <span className="text-slate-400">평균 조회수 (숏폼)</span>
-                    <p className="text-sm font-black text-red-600 mt-0.5">{shortFormViews > 0 ? `${shortFormViews.toLocaleString()}회` : '0회'}</p>
-                  </div>
-                  <div>
-                    <span className="text-slate-400">광고 단가 (PRO)</span>
-                    {isProUser ? (
-                      <p className="text-sm font-black text-rose-600 mt-0.5">{estPrice > 0 ? `${estPrice.toLocaleString()}원~` : '0원'}</p>
-                    ) : (
-                      <div className="relative mt-0.5">
-                        <span className="filter blur-[4px] select-none text-slate-400 font-bold">1,500,000원</span>
-                        <span className="absolute inset-0 flex items-center text-[10px] text-amber-800 font-bold bg-amber-50/90 px-2 rounded border border-amber-200">
-                          <Lock size={10} className="mr-0.5" /> PRO 전용
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <p className="text-[11px] font-bold text-slate-400">최근 발행 영상 콘텐츠</p>
-                  {pList.length > 0 ? (
-                    <div className="grid grid-cols-4 gap-3">
-                      {pList.map((p: any, i: number) => {
-                        const thumb = p.thumbnail_url || p.thumbnail || p.image_url || 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=300';
-                        const title = p.title || p.post_title || '영상 제목 없음';
-                        const pViews = Number(p.view_count || p.views || 0);
-
-                        return (
-                          <a 
-                            key={i} 
-                            href={p.post_url || (p.video_id ? `https://www.youtube.com/watch?v=${p.video_id}` : '#')}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="group relative block rounded-xl border border-slate-100 overflow-hidden bg-slate-100 aspect-video"
-                          >
-                            <img src={thumb} alt="" className="w-full h-full object-cover group-hover:scale-105 transition duration-300" referrerPolicy="no-referrer" />
-                            <div className="absolute inset-0 bg-black/80 backdrop-blur-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-center items-center text-center p-3 text-white space-y-1">
-                              <p className="text-[11px] font-bold line-clamp-2 px-1">{title}</p>
-                              <span className="text-[10px] text-rose-400 flex items-center gap-1"><Eye size={10} /> {pViews > 0 ? `${pViews.toLocaleString()}회` : '조회수 집계중'}</span>
-                            </div>
-                          </a>
-                        );
-                      })}
-                    </div>
-                  ) : !isChannelPostLoaded && postsLoading ? (
-                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 text-center text-xs text-slate-400">
-                      최신 영상을 불러오는 중...
-                    </div>
-                  ) : (
-                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 text-center text-xs text-amber-700 font-semibold">
-                      DB(`influencer_posts`)에 해당 채널({cleanId(channel.channel_id)})의 영상이 아직 수집되지 않았습니다.
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })
-        )}
-
-        {!isProUser && (
-          <div className="bg-white rounded-3xl border border-slate-200 p-8 text-center space-y-4 shadow-xs mt-8">
-            <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-2xl mx-auto flex items-center justify-center font-bold">
-              <Lock size={22} />
-            </div>
-            <div className="space-y-1 max-w-md mx-auto">
-              <h3 className="text-sm font-black text-slate-900">더 많은 유튜브 인플루언서 리스트가 기다리고 있습니다</h3>
-              <p className="text-xs text-slate-500">
-                무료 버전에서는 샘플 채널만 제공됩니다. PRO 플랜으로 업그레이드하고 전체 크리에이터 데이터베이스와 상세 지표를 무제한으로 탐색하세요!
-              </p>
-            </div>
-            <button 
-              type="button"
-              onClick={() => setIsProUser(true)}
-              className="px-6 py-3 bg-gradient-to-r from-red-600 to-rose-500 text-white text-xs font-bold rounded-2xl shadow-md hover:opacity-95 transition cursor-pointer"
-            >
-              👑 PRO 버전 이용하고 전체 리스트 보기
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+                    <p className="text-sm font-black text-red-600 mt-0.5">{shortFormViews >
