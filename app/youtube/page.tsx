@@ -11,15 +11,12 @@ export default function YoutubeSearchPage() {
   const [selectedCategory, setSelectedCategory] = useState('전체');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [favoritesMap, setFavoritesMap] = useState<Record<string, any>>({});
-  
-  // PRO 모드 토글 상태 추가
   const [isProMode, setIsProMode] = useState(true);
 
-  // 풍성하게 보강된 유튜버 리스트 데이터
+  // 각 채널에 맞는 정확한 프로필, 지표, 최신 콘텐츠 데이터 구축
   const [channels, setChannels] = useState([
     {
       id: 'hyojin',
-      channel_id: 'hyojin',
       name: '효연의 레벨업 Hyo\'s Level Up',
       handle: 'Hyo_LevelUp',
       category: '엔터테인먼트',
@@ -37,7 +34,6 @@ export default function YoutubeSearchPage() {
     },
     {
       id: 'onlyoneseoui',
-      channel_id: 'onlyoneseoui',
       name: '온리원서의',
       handle: 'onlyoneseoui',
       category: '푸드',
@@ -55,7 +51,6 @@ export default function YoutubeSearchPage() {
     },
     {
       id: 'awesomelee',
-      channel_id: 'awesomelee',
       name: 'Awesome Lee',
       handle: 'awesomelee',
       category: 'IT테크',
@@ -73,7 +68,6 @@ export default function YoutubeSearchPage() {
     },
     {
       id: 'kimchef',
-      channel_id: 'kimchef',
       name: '김셰프의 킵쿡',
       handle: 'kimchef_cook',
       category: '푸드',
@@ -102,15 +96,14 @@ export default function YoutubeSearchPage() {
   }, []);
 
   const handleToggleFavorite = (item: any) => {
-    const id = String(item.channel_id || item.id);
-    const key = `youtube_${id}`;
+    const key = `youtube_${item.id}`;
     const favs = getFavorites();
 
     if (favs[key]) {
       delete favs[key];
     } else {
       favs[key] = {
-        id,
+        id: item.id,
         platform: 'youtube',
         name: item.name,
         handle: item.handle,
@@ -132,8 +125,7 @@ export default function YoutubeSearchPage() {
     if (selectedIds.size === channels.length) {
       setSelectedIds(new Set());
     } else {
-      const allIds = new Set(channels.map(c => String(c.channel_id || c.id)));
-      setSelectedIds(allIds);
+      setSelectedIds(new Set(channels.map(c => c.id)));
     }
   };
 
@@ -156,12 +148,11 @@ export default function YoutubeSearchPage() {
     let count = 0;
 
     channels.forEach(item => {
-      const id = String(item.channel_id || item.id);
-      if (selectedIds.has(id)) {
-        const key = `youtube_${id}`;
+      if (selectedIds.has(item.id)) {
+        const key = `youtube_${item.id}`;
         if (!favs[key]) {
           favs[key] = {
-            id,
+            id: item.id,
             platform: 'youtube',
             name: item.name,
             handle: item.handle,
@@ -203,7 +194,6 @@ export default function YoutubeSearchPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* PRO 모드 켜기/끄기 토글 버튼 복구 */}
             <button
               type="button"
               onClick={() => setIsProMode(!isProMode)}
@@ -275,31 +265,30 @@ export default function YoutubeSearchPage() {
         {/* 유튜브 카드 리스트 */}
         <div className="space-y-4">
           {channels.map((item) => {
-            const id = String(item.channel_id || item.id);
-            const isChecked = selectedIds.has(id);
-            const isFav = Boolean(favoritesMap[`youtube_${id}`]);
+            const isChecked = selectedIds.has(item.id);
+            const isFav = Boolean(favoritesMap[`youtube_${item.id}`]);
 
             return (
               <div 
-                key={id}
+                key={item.id}
                 className={`bg-white rounded-2xl border transition p-4 md:p-6 space-y-4 shadow-2xs ${
                   isChecked ? 'border-red-500 bg-red-50/10' : 'border-slate-200'
                 }`}
               >
-                {/* 상단 프로필 및 우측 액션 버튼 배치 */}
+                {/* 상단 프로필 및 액션 버튼 */}
                 <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
                   
-                  {/* 좌측: 체크박스 + 프로필 사진 & 이름 */}
                   <div className="flex items-center gap-3 min-w-0">
                     <input 
                       type="checkbox"
                       checked={isChecked}
-                      onChange={() => handleToggleCheckbox(id)}
+                      onChange={() => handleToggleCheckbox(item.id)}
                       className="w-4 h-4 rounded text-red-500 focus:ring-red-500 cursor-pointer flex-shrink-0"
                     />
                     <img 
                       src={item.profile_img_url} 
-                      alt="" 
+                      alt={item.name}
+                      referrerPolicy="no-referrer"
                       className="w-12 h-12 rounded-full border border-slate-200 object-cover flex-shrink-0"
                     />
                     <div className="min-w-0">
@@ -321,7 +310,7 @@ export default function YoutubeSearchPage() {
                     </div>
                   </div>
 
-                  {/* 우측: [저장됨/즐겨찾기] / [광고문의] / [채널상세] 버튼 (상단 배치) */}
+                  {/* 우측 버튼 영역 */}
                   <div className="flex items-center gap-2 w-full md:w-auto">
                     <button
                       type="button"
@@ -347,7 +336,7 @@ export default function YoutubeSearchPage() {
                     {/* 채널 상세 페이지 정상 라우팅 연결 */}
                     <button
                       type="button"
-                      onClick={() => router.push(`/youtube/${id}`)}
+                      onClick={() => router.push(`/youtube/${item.id}`)}
                       className="flex-1 md:flex-initial px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer shadow-xs whitespace-nowrap"
                     >
                       채널상세 <span className="text-xs">&gt;</span>
@@ -356,7 +345,7 @@ export default function YoutubeSearchPage() {
 
                 </div>
 
-                {/* 중앙: 통계 지표 4칸 한 줄 압축 (모바일 좌우 스크롤 지원) */}
+                {/* 중앙 통계 지표 */}
                 <div className="overflow-x-auto no-scrollbar">
                   <div className="flex items-center gap-3 min-w-[650px] bg-slate-50 p-3 rounded-xl border border-slate-100 text-xs">
                     <div className="flex-1 px-3 py-1.5 bg-white rounded-lg border border-slate-200">
@@ -378,7 +367,7 @@ export default function YoutubeSearchPage() {
                   </div>
                 </div>
 
-                {/* 하단: 최신 콘텐츠 4개 미리보기 (레이아웃 개선 및 썸네일 고정) */}
+                {/* 하단 최근 발행 콘텐츠 4개 미리보기 */}
                 <div className="space-y-2">
                   <span className="text-xs font-bold text-slate-500 block">최근 발행 콘텐츠</span>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
@@ -387,6 +376,7 @@ export default function YoutubeSearchPage() {
                         <img 
                           src={video.img} 
                           alt={video.title} 
+                          referrerPolicy="no-referrer"
                           className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition duration-300" 
                         />
                         <div className="relative z-10 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-2.5 pt-6">
