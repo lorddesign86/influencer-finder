@@ -6,7 +6,7 @@ import {
   getFavorites, removeFavoriteItem, updateCustomPrice, updateFavoriteFolder, FavoriteItem 
 } from '@/lib/favorites';
 import { 
-  Bookmark, Folder, Download, Plus, Trash2, Edit3, Check 
+  Bookmark, Folder, Download, Plus, Trash2, Edit3, Check, FolderInput 
 } from 'lucide-react';
 
 export default function FavoritesPage() {
@@ -62,9 +62,9 @@ export default function FavoritesPage() {
     setFavorites(Object.values(getFavorites()));
   };
 
-  // 선택한 항목들 일괄 폴더 이동 처리 함수
+  // 선택한 항목들 일괄 폴더 이동 처리 함수 (정확한 폴더명 반영)
   const handleBulkMoveFolder = (targetFolder: string) => {
-    if (!targetFolder || selectedIds.size === 0) return;
+    if (selectedIds.size === 0) return;
     
     selectedIds.forEach(id => {
       updateFavoriteFolder(id, targetFolder);
@@ -72,7 +72,7 @@ export default function FavoritesPage() {
 
     setFavorites(Object.values(getFavorites()));
     setSelectedIds(new Set());
-    alert(`선택한 ${selectedIds.size}개의 채널이 '${targetFolder}'(으)로 이동되었습니다.`);
+    alert(`선택한 채널들이 '${targetFolder}'(으)로 이동되었습니다.`);
   };
 
   const goToDetail = (item: FavoriteItem) => {
@@ -150,24 +150,22 @@ export default function FavoritesPage() {
               <Folder size={14} /> 폴더 관리
             </button>
 
-            {/* 채널 선택 시에만 나타나는 일괄 이동 바 */}
+            {/* 채널 선택 시에만 나타나는 일괄 이동 버튼들 */}
             {selectedIds.size > 0 && (
-              <div className="flex items-center gap-1.5 bg-red-50 border border-red-200 px-3 py-1.5 rounded-xl">
+              <div className="flex items-center gap-1.5 bg-red-50 border border-red-200 px-3 py-1.5 rounded-xl flex-wrap">
                 <span className="text-xs font-bold text-red-600">{selectedIds.size}개 선택됨:</span>
-                <select 
-                  defaultValue=""
-                  onChange={(e) => {
-                    const target = e.target.value;
-                    if (target) {
-                      handleBulkMoveFolder(target);
-                      e.target.value = ''; // 선택 초기화
-                    }
-                  }}
-                  className="px-2.5 py-1 bg-white border border-red-300 rounded-lg text-xs font-bold text-slate-700 focus:outline-none cursor-pointer"
-                >
-                  <option value="" disabled>폴더로 이동...</option>
-                  {folders.map(f => <option key={f} value={f}>{f}로 이동</option>)}
-                </select>
+                <div className="flex items-center gap-1">
+                  {folders.map(f => (
+                    <button
+                      key={f}
+                      type="button"
+                      onClick={() => handleBulkMoveFolder(f)}
+                      className="px-2.5 py-1 bg-white hover:bg-red-600 hover:text-white border border-red-300 rounded-lg text-xs font-bold text-red-600 transition shadow-2xs cursor-pointer"
+                    >
+                      {f}로 이동
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -190,7 +188,7 @@ export default function FavoritesPage() {
           </div>
         </div>
 
-        {/* 즐겨찾기 리스트 (개별 폴더 셀렉트 제거 및 좌우 스크롤 구조) */}
+        {/* 즐겨찾기 리스트 */}
         {filteredFavorites.length === 0 ? (
           <div className="p-20 text-center text-sm text-slate-400 bg-white rounded-2xl border border-slate-200">
             저장된 즐겨찾기 항목이 없습니다. 탐색 페이지에서 채널을 추가해 보세요!
@@ -211,7 +209,7 @@ export default function FavoritesPage() {
                         isChecked ? 'bg-red-50/40' : ''
                       }`}
                     >
-                      {/* 1. 왼쪽 고정 영역: 체크박스 + 프로필 & 채널명 (클릭 시 상세페이지 이동) */}
+                      {/* 1. 왼쪽 고정 영역: 체크박스 + 프로필 & 채널명 */}
                       <div className="flex items-center gap-3 min-w-[260px] max-w-[260px] flex-shrink-0 bg-white sticky left-0 z-10 pr-2">
                         <button
                           type="button"
