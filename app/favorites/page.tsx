@@ -6,7 +6,7 @@ import {
   getFavorites, removeFavoriteItem, updateFavoriteFolder, FavoriteItem 
 } from '@/lib/favorites';
 import { 
-  Bookmark, Folder, Download, Plus, Trash2, Edit3, Check, X, MessageSquare 
+  Bookmark, Folder, Download, Plus, Trash2, Edit3, Check, X 
 } from 'lucide-react';
 
 export default function FavoritesPage() {
@@ -22,24 +22,36 @@ export default function FavoritesPage() {
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   
-  // 메모 남기기 편집 상태
+  // 메모장 편집 상태
   const [editingMemoId, setEditingMemoId] = useState<string | null>(null);
   const [tempMemo, setTempMemo] = useState<string>('');
 
+  const loadFavoritesData = () => {
+    const raw = localStorage.getItem('findlist_favorites');
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        setFavorites(Object.values(parsed));
+      } catch (e) {
+        setFavorites([]);
+      }
+    } else {
+      setFavorites([]);
+    }
+  };
+
   useEffect(() => {
-    const loadFavs = () => {
-      const items = Object.values(getFavorites());
-      setFavorites(items);
-    };
-    loadFavs();
-    window.addEventListener('favorites-updated', loadFavs);
-    return () => window.removeEventListener('favorites-updated', loadFavs);
+    loadFavoritesData();
+    const handleSync = () => loadFavoritesData();
+    window.addEventListener('favorites-updated', handleSync);
+    return () => window.removeEventListener('favorites-updated', handleSync);
   }, []);
 
   const filteredFavorites = favorites.filter(item => {
     if (activeTab === 'youtube' && item.platform !== 'youtube') return false;
     if (activeTab === 'blog' && item.platform !== 'blog') return false;
-    if (selectedFolder !== '전체보기' && (item.folder || '기본 폴더') !== selectedFolder) return false;
+    const itemFolder = item.folder || '기본 폴더';
+    if (selectedFolder !== '전체보기' && itemFolder !== selectedFolder) return false;
     return true;
   });
 
@@ -56,36 +68,56 @@ export default function FavoritesPage() {
     });
   };
 
+  // 휴지통 버튼: 즐겨찾기에서 즉시 삭제
   const handleRemove = (id: string) => {
     if (confirm('이 채널을 즐겨찾기에서 삭제하시겠습니까?')) {
       removeFavoriteItem(id);
-      setFavorites(Object.values(getFavorites()));
+      loadFavoritesData();
       selectedIds.delete(id);
       setSelectedIds(new Set(selectedIds));
     }
   };
 
-  // 메모 저장 함수 (custom_price 필드를 메모 저장 용도로 활용하거나 별도 관리)
+  // 메모 저장
   const handleSaveMemo = (id: string) => {
-    const favs = getFavorites();
-    if (favs[id]) {
-      favs[id].custom_memo = tempMemo; // 메모 저장
-      localStorage.setItem('findlist_favorites', JSON.stringify(favs));
-      window.dispatchEvent(new Event('favorites-updated'));
+    try {
+      const raw = localStorage.getItem('findlist_favorites');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed[id]) {
+          parsed[id].custom_memo = tempMemo;
+          localStorage.setItem('findlist_favorites', JSON.stringify(parsed));
+          window.dispatchEvent(new Event('favorites-updated'));
+        }
+      }
+    } catch (e) {
+      console.error(e);
     }
     setEditingMemoId(null);
-    setFavorites(Object.values(getFavorites()));
+    loadFavoritesData();
   };
 
-  // 선택한 채널들 일괄 폴더 이동 (상태 즉시 반영)
+  // 체크한 항목들 특정 폴더로 일괄 이동
   const handleBulkMoveFolder = (targetFolder: string) => {
     if (selectedIds.size === 0) return;
     
-    selectedIds.forEach(id => {
-      updateFavoriteFolder(id, targetFolder);
-    });
+    try {
+      const raw = localStorage.getItem('findlist_favorites');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        selectedIds.forEach(id => {
+          if (parsed[id]) {
+            parsed[id].folder = targetFolder;
+          }
+        });
+        localStorage.setItem('findlist_favorites', JSON.stringify(parsed));
+        window.dispatchEvent(new Event('favorites-updated'));
+      }
+    } catch (e) {
+      console.error(e);
+    }
 
-    setFavorites(Object.values(getFavorites()));
+    loadFavoritesData();
     setSelectedIds(new Set());
     alert(`선택한 ${selectedIds.size}개의 채널이 '${targetFolder}'(으)로 이동되었습니다.`);
   };
@@ -102,25 +134,34 @@ export default function FavoritesPage() {
     setNewFolderName('');
   };
 
-  // 폴더 삭제
+  // 폴더 삭제 (삭제 시 해당 폴더 안의 채널들은 '기본 폴더'로 이동)
   const handleDeleteFolder = (folderToDelete: string) => {
     if (folders.length <= 1) {
       alert('최소 1개의 폴더는 남아있어야 합니다.');
       return;
     }
     if (confirm(`'${folderToDelete}' 폴더를 삭제하시겠습니까? 해당 폴더에 있던 채널들은 '기본 폴더'로 이동됩니다.`)) {
-      const allFavs = getFavorites();
-      Object.values(allFavs).forEach(item => {
-        if ((item.folder || '기본 폴더') === folderToDelete) {
-          updateFavoriteFolder(item.id, '기본 폴더');
+      try {
+        const raw = localStorage.getItem('findlist_favorites');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          Object.values(parsed).forEach((item: any) => {
+            if ((item.folder || '기본 폴더') === folderToDelete) {
+              item.folder = '기본 폴더';
+            }
+          });
+          localStorage.setItem('findlist_favorites', JSON.stringify(parsed));
+          window.dispatchEvent(new Event('favorites-updated'));
         }
-      });
+      } catch (e) {
+        console.error(e);
+      }
 
       setFolders(folders.filter(f => f !== folderToDelete));
       if (selectedFolder === folderToDelete) {
         setSelectedFolder('전체보기');
       }
-      setFavorites(Object.values(getFavorites()));
+      loadFavoritesData();
     }
   };
 
@@ -365,7 +406,7 @@ export default function FavoritesPage() {
                             )}
                           </div>
 
-                          {/* 휴지통 삭제 버튼 (즐겨찾기에서 제거) */}
+                          {/* 휴지통 삭제 버튼 */}
                           <button
                             type="button"
                             onClick={() => handleRemove(item.id)}
