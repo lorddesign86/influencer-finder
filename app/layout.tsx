@@ -78,10 +78,10 @@ export default function RootLayout({
               <div className="pt-2 border-t border-slate-100">
                 <p className="text-xs font-semibold text-slate-400 px-3 mb-2 tracking-wider">고객 지원 및 안내</p>
                 <nav className="space-y-1 text-xs font-medium text-slate-600">
-                  <a href="#" className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-slate-50 transition">
-                    <span>요금 안내</span>
-                    <span className="text-[10px] bg-red-50 text-red-600 font-bold px-1.5 py-0.5 rounded">PRO</span>
-                  </a>
+                <Link href="/pricing" className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-slate-50 transition">
+                <span>요금 안내</span>
+                <span className="text-[10px] bg-red-50 text-red-600 font-bold px-1.5 py-0.5 rounded">PRO</span>
+                </Link>
                   <a href="#" className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-50 transition">
                     <Briefcase size={14} className="text-slate-400" /> 광고 대행 서비스
                   </a>
