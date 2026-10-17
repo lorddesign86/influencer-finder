@@ -3,13 +3,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
-  getFavorites, removeBulkFavorites, updateFavoriteMeta, FavoriteItem 
+  getFavorites, removeBulkFavorites, updateFavoriteMeta, 
+  getFolders, addFolder, deleteFolder, renameFolder, FavoriteItem, DEFAULT_FOLDER 
 } from '@/lib/favorites';
 import { 
-  Trash2, FileText, Download, Plus, Check, Edit3, Folder, ExternalLink 
+  Trash2, FileText, Download, Plus, Check, Edit3, Folder, ExternalLink, Settings, FolderPlus, FolderPen 
 } from 'lucide-react';
 
-// 숫자를 '19만', '124만'처럼 간결하게 표기하는 헬퍼
 const formatCompactNumber = (num: number): string => {
   if (!num || num <= 0) return '0';
   if (num >= 10000) {
@@ -22,18 +22,29 @@ const formatCompactNumber = (num: number): string => {
 export default function FavoritesPage() {
   const router = useRouter();
   const [favoritesMap, setFavoritesMap] = useState<Record<string, FavoriteItem>>({});
+  const [folders, setFolders] = useState<string[]>([DEFAULT_FOLDER]);
+  
   const [platformTab, setPlatformTab] = useState<'all' | 'youtube' | 'blog'>('all');
-  const [selectedFolder, setSelectedFolder] = useState<string>('기본 폴더');
+  const [selectedFolder, setSelectedFolder] = useState<string>(DEFAULT_FOLDER);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
 
-  // 인라인 편집 상태 (메모 & 회원별 커스텀 단가)
+  // 폴더 관리 모달/입력 상태
+  const [isManagingFolders, setIsManagingFolders] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+  const [editingFolderName, setEditingFolderName] = useState<string | null>(null);
+  const [folderNameDraft, setFolderNameDraft] = useState('');
+
+  // 인라인 편집 상태 (메모 & 단가)
   const [editingMemoKey, setEditingMemoKey] = useState<string | null>(null);
   const [memoDraft, setMemoDraft] = useState<string>('');
   const [editingPriceKey, setEditingPriceKey] = useState<string | null>(null);
   const [priceDraft, setPriceDraft] = useState<string>('');
 
   useEffect(() => {
-    const load = () => setFavoritesMap(getFavorites());
+    const load = () => {
+      setFavoritesMap(getFavorites());
+      setFolders(getFolders());
+    };
     load();
     window.addEventListener('favorites-updated', load);
     return () => window.removeEventListener('favorites-updated', load);
@@ -49,7 +60,7 @@ export default function FavoritesPage() {
   const filteredItems = useMemo(() => {
     return allItems.filter((item) => {
       if (platformTab !== 'all' && item.platform !== platformTab) return false;
-      if (selectedFolder !== '전체 폴더' && (item.folder || '기본 폴더') !== selectedFolder) return false;
+      if (selectedFolder !== '전체 폴더' && (item.folder || DEFAULT_FOLDER) !== selectedFolder) return false;
       return true;
     });
   }, [allItems, platformTab, selectedFolder]);
@@ -77,6 +88,51 @@ export default function FavoritesPage() {
     if (!confirm(`선택한 ${selectedKeys.size}개의 채널을 즐겨찾기에서 삭제하시겠습니까?`)) return;
     removeBulkFavorites(Array.from(selectedKeys));
     setSelectedKeys(new Set());
+  };
+
+  // 선택한 채널들을 다른 폴더로 일괄 이동
+  const handleMoveToFolder = (targetFolder: string) => {
+    if (selectedKeys.size === 0) return;
+    selectedKeys.forEach((key) => {
+      updateFavoriteMeta(key, { folder: targetFolder });
+    });
+    setSelectedKeys(new Set());
+    alert(`선택한 채널들이 [${targetFolder}] 폴더로 이동되었습니다.`);
+  };
+
+  // 폴더 추가 핸들러
+  const handleCreateFolder = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newFolderName.trim()) return;
+    const success = addFolder(newFolderName);
+    if (success) {
+      setNewFolderName('');
+    } else {
+      alert('이미 존재하는 폴더명이거나 올바르지 않은 이름입니다.');
+    }
+  };
+
+  // 폴더 이름 변경 핸들러
+  const handleSaveRename = (oldName: string) => {
+    if (!folderNameDraft.trim()) return;
+    const success = renameFolder(oldName, folderNameDraft);
+    if (success) {
+      if (selectedFolder === oldName) setSelectedFolder(folderNameDraft.trim());
+      setEditingFolderName(null);
+    } else {
+      alert('변경할 수 없거나 이미 존재하는 폴더명입니다.');
+    }
+  };
+
+  // 폴더 삭제 핸들러
+  const handleDeleteFolder = (folderName: string) => {
+    if (folderName === DEFAULT_FOLDER) {
+      alert('기본 폴더는 삭제할 수 없습니다.');
+      return;
+    }
+    if (!confirm(`[${folderName}] 폴더를 삭제하시겠습니까? 해당 폴더에 있던 채널들은 기본 폴더로 이동됩니다.`)) return;
+    deleteFolder(folderName);
+    if (selectedFolder === folderName) setSelectedFolder(DEFAULT_FOLDER);
   };
 
   // 메모 저장
@@ -113,8 +169,9 @@ export default function FavoritesPage() {
       return;
     }
 
-    const headers = ['플랫폼', '채널명', '핸들/ID', '구독자/팬수', '롱폼조회수/일방문자', '숏폼조회수/이웃수', '회원설정단가(원)', '메모'];
+    const headers = ['폴더명', '플랫폼', '채널명', '핸들/ID', '구독자/팬수', '롱폼조회수/일방문자', '숏폼조회수/이웃수', '회원설정단가(원)', '메모'];
     const rows = targetList.map(i => [
+      `"${(i.folder || DEFAULT_FOLDER).replace(/"/g, '""')}"`,
       i.platform.toUpperCase(),
       `"${(i.name || '').replace(/"/g, '""')}"`,
       i.handle,
@@ -136,7 +193,6 @@ export default function FavoritesPage() {
     document.body.removeChild(link);
   };
 
-  // 선택된 채널들의 총 예산 합산
   const totalSelectedBudget = useMemo(() => {
     const list = selectedKeys.size > 0
       ? filteredItems.filter(i => selectedKeys.has(i._key))
@@ -147,7 +203,7 @@ export default function FavoritesPage() {
   return (
     <div className="flex-1 flex flex-col h-full bg-[#f8f9fa] overflow-y-auto p-8">
       <div className="max-w-6xl mx-auto w-full space-y-6">
-        {/* 상단 타이틀 및 플랫폼별 탭 */}
+        {/* 상단 타이틀 & 탭 */}
         <div className="flex items-center justify-between border-b border-slate-200 pb-4">
           <div className="space-y-2">
             <h1 className="text-2xl font-black text-slate-900">즐겨찾기</h1>
@@ -182,7 +238,6 @@ export default function FavoritesPage() {
             </div>
           </div>
 
-          {/* 우측 예산 요약 카드 */}
           <div className="bg-white px-5 py-3 rounded-2xl border border-slate-200 shadow-2xs text-right">
             <span className="text-[11px] font-bold text-slate-400 block">
               {selectedKeys.size > 0 ? `선택된 ${selectedKeys.size}개 채널 예상 총 광고비` : `현재 리스트(${filteredItems.length}개) 예상 총 광고비`}
@@ -193,7 +248,7 @@ export default function FavoritesPage() {
           </div>
         </div>
 
-        {/* 폴더 선택 및 컨트롤 헤더 (vling 스타일) */}
+        {/* 폴더 관리 패널 토글 바 */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
           <div className="p-5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -204,21 +259,48 @@ export default function FavoritesPage() {
                   onChange={(e) => setSelectedFolder(e.target.value)}
                   className="bg-transparent focus:outline-none cursor-pointer"
                 >
-                  <option value="기본 폴더">기본 폴더</option>
-                  <option value="1순위 섭외 후보">1순위 섭외 후보</option>
-                  <option value="견적 협의중">견적 협의중</option>
+                  {folders.map((f) => (
+                    <option key={f} value={f}>{f}</option>
+                  ))}
                   <option value="전체 폴더">전체 폴더 보기</option>
                 </select>
               </div>
 
+              <button
+                type="button"
+                onClick={() => setIsManagingFolders(!isManagingFolders)}
+                className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
+              >
+                <Settings size={13} /> 폴더 관리
+              </button>
+
+              {/* 다중 선택 시 다른 폴더로 이동 기능 */}
               {selectedKeys.size > 0 && (
-                <button
-                  type="button"
-                  onClick={handleDeleteSelected}
-                  className="flex items-center gap-1.5 px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-xl text-xs font-bold transition cursor-pointer"
-                >
-                  <Trash2 size={13} /> 선택 삭제 ({selectedKeys.size})
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <select
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        handleMoveToFolder(e.target.value);
+                        e.target.value = '';
+                      }
+                    }}
+                    defaultValue=""
+                    className="px-3 py-2 bg-red-50 text-red-700 border border-red-200 rounded-xl text-xs font-bold cursor-pointer"
+                  >
+                    <option value="" disabled>선택 채널 폴더 이동...</option>
+                    {folders.map(f => (
+                      <option key={f} value={f}>{f}로 이동</option>
+                    ))}
+                  </select>
+
+                  <button
+                    type="button"
+                    onClick={handleDeleteSelected}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-xl text-xs font-bold transition cursor-pointer"
+                  >
+                    <Trash2 size={13} /> 삭제 ({selectedKeys.size})
+                  </button>
+                </div>
               )}
             </div>
 
@@ -240,7 +322,85 @@ export default function FavoritesPage() {
             </div>
           </div>
 
-          {/* 심플 한눈에 보기 테이블 (최신글 썸네일 제외) */}
+          {/* [폴더 관리 확장 영역] 폴더 생성, 이름 변경, 삭제 */}
+          {isManagingFolders && (
+            <div className="bg-slate-50 p-5 border-b border-slate-200 space-y-4 animate-fadeIn">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                  <FolderPlus size={15} className="text-red-600" /> 커스텀 폴더 추가 및 관리
+                </h3>
+                <form onSubmit={handleCreateFolder} className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={newFolderName}
+                    onChange={(e) => setNewFolderName(e.target.value)}
+                    placeholder="새 폴더 이름 입력..."
+                    className="px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-medium focus:outline-none focus:ring-1 focus:ring-red-500"
+                  />
+                  <button
+                    type="submit"
+                    className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg transition cursor-pointer"
+                  >
+                    폴더 생성
+                  </button>
+                </form>
+              </div>
+
+              <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-200">
+                {folders.map((f) => (
+                  <div key={f} className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-slate-200 text-xs shadow-2xs">
+                    {editingFolderName === f ? (
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="text"
+                          value={folderNameDraft}
+                          onChange={(e) => setFolderNameDraft(e.target.value)}
+                          className="w-24 px-2 py-0.5 border border-red-400 rounded text-xs"
+                          autoFocus
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleSaveRename(f)}
+                          className="p-1 bg-red-600 text-white rounded"
+                        >
+                          <Check size={11} />
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <span className="font-bold text-slate-800">{f}</span>
+                        {f !== DEFAULT_FOLDER && (
+                          <div className="flex items-center gap-1 ml-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingFolderName(f);
+                                setFolderNameDraft(f);
+                              }}
+                              className="text-slate-400 hover:text-slate-700"
+                              title="이름 변경"
+                            >
+                              <FolderPen size={12} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteFolder(f)}
+                              className="text-slate-400 hover:text-rose-600"
+                              title="폴더 삭제"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 즐겨찾기 목록 테이블 */}
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
@@ -254,9 +414,9 @@ export default function FavoritesPage() {
                     />
                   </th>
                   <th className="py-3.5 px-4 min-w-[260px]">채널명</th>
-                  <th className="py-3.5 px-4 w-32">구독자 / 팬 수 ↕</th>
-                  <th className="py-3.5 px-4 w-36">롱폼 평균 / 일방문자 ↕</th>
-                  <th className="py-3.5 px-4 w-36">Shorts 평균 / 이웃수 ↕</th>
+                  <th className="py-3.5 px-4 w-32">구독자 / 팬 수</th>
+                  <th className="py-3.5 px-4 w-36">롱폼 평균 / 일방문자</th>
+                  <th className="py-3.5 px-4 w-36">Shorts 평균 / 이웃수</th>
                   <th className="py-3.5 px-4 w-44">회원 설정 단가 (클릭 수정)</th>
                   <th className="py-3.5 px-5 min-w-[240px]">메모</th>
                 </tr>
@@ -265,7 +425,7 @@ export default function FavoritesPage() {
                 {filteredItems.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="py-20 text-center text-slate-400">
-                      즐겨찾기에 추가된 채널이 없습니다. 유튜버 찾기 또는 블로거 찾기에서 체크박스를 선택해 추가해 보세요!
+                      해당 폴더에 즐겨찾기된 채널이 없습니다. 탐색 페이지에서 [즐겨찾기] 버튼을 눌러 추가해 보세요!
                     </td>
                   </tr>
                 ) : (
@@ -278,7 +438,6 @@ export default function FavoritesPage() {
                         key={item._key}
                         className={`hover:bg-slate-50/80 transition ${isChecked ? 'bg-red-50/30' : ''}`}
                       >
-                        {/* 체크박스 */}
                         <td className="py-4 px-5 text-center">
                           <input
                             type="checkbox"
@@ -288,7 +447,6 @@ export default function FavoritesPage() {
                           />
                         </td>
 
-                        {/* 채널 프로필 + 이름 + 태그 */}
                         <td className="py-4 px-4">
                           <div className="flex items-center gap-3">
                             <img
@@ -316,36 +474,25 @@ export default function FavoritesPage() {
                                   {item.platform === 'youtube' ? 'YT' : 'BLOG'}
                                 </span>
                               </div>
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {(item.tags || []).slice(0, 3).map((t, idx) => (
-                                  <span
-                                    key={idx}
-                                    className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded"
-                                  >
-                                    {t}
-                                  </span>
-                                ))}
-                              </div>
+                              <span className="text-[10px] text-rose-600 font-semibold bg-rose-50 px-1.5 py-0.5 rounded border border-rose-100 mt-1 inline-block">
+                                폴더: {item.folder || DEFAULT_FOLDER}
+                              </span>
                             </div>
                           </div>
                         </td>
 
-                        {/* 지표 1: 구독자 수 */}
                         <td className="py-4 px-4 font-bold text-slate-800">
                           {formatCompactNumber(item.metric1)}
                         </td>
 
-                        {/* 지표 2: 롱폼 조회수 / 일방문자 */}
                         <td className="py-4 px-4 font-bold text-slate-800">
                           {formatCompactNumber(item.metric2)}
                         </td>
 
-                        {/* 지표 3: 숏폼 조회수 / 이웃수 */}
                         <td className="py-4 px-4 font-bold text-slate-800">
                           {formatCompactNumber(item.metric3)}
                         </td>
 
-                        {/* 회원별 커스텀 단가 설정 */}
                         <td className="py-4 px-4">
                           {editingPriceKey === item._key ? (
                             <div className="flex items-center gap-1">
@@ -370,22 +517,16 @@ export default function FavoritesPage() {
                             <div
                               onClick={() => startEditPrice(item._key, item.custom_price, item.base_price)}
                               className="group flex items-center gap-1.5 cursor-pointer py-1.5 px-2.5 rounded-lg hover:bg-slate-100 transition"
-                              title="클릭하여 회원 전용 커스텀 단가 수정"
+                              title="클릭하여 단가 수정"
                             >
                               <span className={`font-black ${item.custom_price != null ? 'text-rose-600' : 'text-slate-700'}`}>
                                 {effectivePrice > 0 ? `${effectivePrice.toLocaleString()}원` : '단가 미설정'}
                               </span>
                               <Edit3 size={12} className="text-slate-400 opacity-0 group-hover:opacity-100 transition" />
-                              {item.custom_price != null && (
-                                <span className="text-[9px] bg-rose-50 text-rose-600 border border-rose-200 px-1 rounded">
-                                  지정가
-                                </span>
-                              )}
                             </div>
                           )}
                         </td>
 
-                        {/* 메모 추가 및 인라인 수정 (vling 스타일 버튼) */}
                         <td className="py-4 px-5">
                           {editingMemoKey === item._key ? (
                             <div className="flex items-center gap-1.5">
@@ -394,9 +535,9 @@ export default function FavoritesPage() {
                                 value={memoDraft}
                                 onChange={(e) => setMemoDraft(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && saveMemo(item._key)}
-                                placeholder="섭외 현황, 담당자 연락처 등 메모..."
+                                placeholder="메모 입력..."
                                 autoFocus
-                                className="flex-1 px-3 py-2 border border-slate-300 rounded-xl text-xs focus:outline-none focus:border-slate-900"
+                                className="flex-1 px-3 py-2 border border-slate-300 rounded-xl text-xs focus:outline-none"
                               />
                               <button
                                 type="button"
