@@ -6,7 +6,7 @@ import {
   getFavorites, removeFavoriteItem, updateCustomPrice, FavoriteItem 
 } from '@/lib/favorites';
 import { 
-  Bookmark, Folder, Download, Plus, Trash2, Edit3, CheckSquare, Square, Check 
+  Bookmark, Folder, Download, Plus, Trash2, Edit3, Check 
 } from 'lucide-react';
 
 export default function FavoritesPage() {
@@ -145,7 +145,7 @@ export default function FavoritesPage() {
           </div>
         </div>
 
-        {/* 즐겨찾기 리스트 (PC에서는 가로 한 줄 행 구조, 모바일에서는 유연하게 대응) */}
+        {/* 즐겨찾기 리스트 (항상 가로 한 줄 행 구조) */}
         {filteredFavorites.length === 0 ? (
           <div className="p-20 text-center text-sm text-slate-400 bg-white rounded-2xl border border-slate-200">
             저장된 즐겨찾기 항목이 없습니다. 탐색 페이지에서 채널을 추가해 보세요!
@@ -159,12 +159,12 @@ export default function FavoritesPage() {
               return (
                 <div 
                   key={item.id}
-                  className={`p-4 md:px-6 md:py-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition hover:bg-slate-50/80 ${
+                  className={`px-4 py-3.5 flex items-center justify-between gap-4 transition hover:bg-slate-50/80 ${
                     isChecked ? 'bg-red-50/40' : ''
                   }`}
                 >
                   {/* 좌측: 체크박스 + 프로필 & 채널명 */}
-                  <div className="flex items-center gap-3.5 min-w-0 w-full md:w-1/3">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
                     <button
                       type="button"
                       onClick={() => toggleSelect(item.id)}
@@ -179,7 +179,7 @@ export default function FavoritesPage() {
                       src={item.profile_img_url} 
                       alt="" 
                       referrerPolicy="no-referrer"
-                      className="w-11 h-11 rounded-full border border-slate-200 object-cover flex-shrink-0"
+                      className="w-10 h-10 rounded-full border border-slate-200 object-cover flex-shrink-0"
                     />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
@@ -190,28 +190,28 @@ export default function FavoritesPage() {
                           {item.platform}
                         </span>
                       </div>
-                      <p className="text-[10px] md:text-xs text-slate-400 truncate mt-0.5">@{item.handle}</p>
+                      <p className="text-[10px] text-slate-400 truncate">@{item.handle}</p>
                     </div>
                   </div>
 
-                  {/* 중앙: 구독자 및 조회수 지표 */}
-                  <div className="flex items-center gap-6 text-xs text-slate-600 w-full md:w-auto justify-between md:justify-start px-2 md:px-0">
-                    <div>
+                  {/* 중앙: 구독자 및 조회수 지표 (한 줄 배치) */}
+                  <div className="hidden sm:flex items-center gap-6 text-xs text-slate-600 flex-shrink-0">
+                    <div className="text-right">
                       <span className="text-[10px] text-slate-400 block">{item.platform === 'youtube' ? '구독자 수' : '팬 수'}</span>
                       <strong className="text-slate-900 font-black">{(item.metric1 || 0).toLocaleString()}명</strong>
                     </div>
-                    <div>
+                    <div className="text-right">
                       <span className="text-[10px] text-slate-400 block">{item.platform === 'youtube' ? '평균 조회수' : '일일 방문자'}</span>
                       <strong className="text-red-500 font-black">{(item.metric2 || 0).toLocaleString()}{item.platform === 'youtube' ? '회' : '명'}</strong>
                     </div>
                   </div>
 
                   {/* 우측: 예상 광고 단가 및 수정/삭제 버튼 */}
-                  <div className="flex items-center justify-between md:justify-end gap-4 w-full md:w-auto pt-3 md:pt-0 border-t md:border-t-0 border-slate-100">
-                    <div className="text-left md:text-right">
+                  <div className="flex items-center gap-4 flex-shrink-0">
+                    <div className="text-right">
                       <span className="text-[10px] text-slate-400 block">예상 광고 단가</span>
                       {editingPriceId === item.id ? (
-                        <div className="flex items-center gap-1.5 mt-1">
+                        <div className="flex items-center gap-1.5 mt-0.5">
                           <input 
                             type="text"
                             value={tempPrice}
@@ -222,7 +222,7 @@ export default function FavoritesPage() {
                           <button 
                             type="button"
                             onClick={() => handleSavePrice(item.id)}
-                            className="px-2.5 py-1 bg-red-500 text-white rounded-lg text-[11px] font-bold"
+                            className="px-2 py-1 bg-red-500 text-white rounded-lg text-[11px] font-bold"
                           >
                             저장
                           </button>
