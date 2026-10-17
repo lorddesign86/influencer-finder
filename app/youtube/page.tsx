@@ -19,39 +19,34 @@ export default function YoutubeDashboardPage() {
   
   const [channels, setChannels] = useState<any[]>([]);
   const [postsMap, setPostsMap] = useState<Record<string, any[]>>({});
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [postsLoading, setPostsLoading] = useState(false);
 
+  // 1단계: 채널 목록만 먼저 초고속으로 로드 (화면 멈춤 원천 차단)
   useEffect(() => {
-    const fetchYoutubeData = async () => {
+    const fetchChannels = async () => {
       setLoading(true);
       try {
-        // 채널과 포스트를 단 두 번의 병렬 요청으로 한 번에 가져와서 속도를 극대화합니다.
-        const [cRes, pRes] = await Promise.all([
-          supabase.from('influencers').select('*').limit(300),
-          supabase.from('influencer_posts').select('*').order('published_at', { ascending: false }).limit(3000)
-        ]);
+        const { data, error } = await supabase
+          .from('influencers')
+          .select('*')
+          .limit(500);
 
-        if (cRes.data) setChannels(cRes.data);
-
-        if (pRes.data) {
-          const map: Record<string, any[]> = {};
-          pRes.data.forEach((p: any) => {
-            const cid = String(p.channel_id || p.influencer_id || '').trim();
-            if (!cid) return;
-            if (!map[cid]) map[cid] = [];
-            if (map[cid].length < 4) {
-              map[cid].push(p);
-            }
-          });
-          setPostsMap(map);
+        if (error) {
+          console.error('채널 로드 에러:', error);
+        } else if (data) {
+          setChannels(data);
         }
+      } catch (err) {
+        console.error('예외 발생:', err);
       } finally {
         setLoading(false);
       }
     };
-    fetchYoutubeData();
+    fetchChannels();
   }, []);
 
+  // 화면에 보여줄 채널 필터링 및 정렬
   const displayedChannels = useMemo(() => {
     const q = search.trim().toLowerCase();
     
@@ -91,8 +86,60 @@ export default function YoutubeDashboardPage() {
       );
     });
 
-    return { list: filtered, isDefaultRecommend: false };
+    // 화면 렌더링 부하 방지를 위해 최대 30개씩 표시
+    return { list: filtered.slice(0, 30), isDefaultRecommend: false };
   }, [channels, search, selectedTag]);
+
+  // 2단계: 현재 화면에 노출된 채널들의 channel_id만 모아서 포스트를 정확히 조회 (.in 쿼리)
+  useEffect(() => {
+    const fetchPostsForDisplayed = async () => {
+      const targetCids = displayedChannels.list
+        .map(c => String(c.channel_id || '').trim())
+        .filter(Boolean);
+
+      if (targetCids.length === 0) return;
+
+      // 이미 로드된 채널은 제외하고 아직 안 불러온 채널만 추가 요청
+      const missingCids = targetCids.filter(cid => !postsMap[cid]);
+      if (missingCids.length === 0) return;
+
+      setPostsLoading(true);
+      try {
+        const { data: pData, error } = await supabase
+          .from('influencer_posts')
+          .select('*')
+          .in('channel_id', missingCids)
+          .order('published_at', { ascending: false })
+          .limit(missingCids.length * 15); // 채널당 충분한 최신 영상을 가져옴
+
+        if (!error && pData) {
+          setPostsMap(prev => {
+            const next = { ...prev };
+            // 초기화 (데이터가 없는 채널도 빈 배열로 마킹하여 재요청 방지)
+            missingCids.forEach(cid => {
+              if (!next[cid]) next[cid] = [];
+            });
+
+            pData.forEach((p: any) => {
+              const cid = String(p.channel_id || '').trim();
+              if (!cid) return;
+              if (!next[cid]) next[cid] = [];
+              if (next[cid].length < 4) {
+                next[cid].push(p);
+              }
+            });
+            return next;
+          });
+        }
+      } catch (err) {
+        console.error('포스트 로드 에러:', err);
+      } finally {
+        setPostsLoading(false);
+      }
+    };
+
+    fetchPostsForDisplayed();
+  }, [displayedChannels.list]);
 
   const handleOpenDetail = (channel: any) => {
     const targetId = channel.channel_id || channel.id;
@@ -159,7 +206,9 @@ export default function YoutubeDashboardPage() {
         </div>
 
         {loading ? (
-          <div className="p-20 text-center text-sm text-slate-400">유튜버 데이터를 초고속으로 불러오는 중...</div>
+          <div className="p-20 text-center text-sm text-slate-400 bg-white rounded-2xl border border-slate-200">
+            채널 목록을 불러오는 중입니다...
+          </div>
         ) : displayedChannels.list.length === 0 ? (
           <div className="p-20 text-center text-sm text-slate-400 bg-white rounded-2xl border border-slate-200">
             데이터베이스에 일치하는 크리에이터가 없습니다.
@@ -273,6 +322,10 @@ export default function YoutubeDashboardPage() {
                           </div>
                         );
                       })}
+                    </div>
+                  ) : postsLoading && !postsMap[cId] ? (
+                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 text-center text-xs text-slate-400">
+                      최신 영상을 불러오는 중...
                     </div>
                   ) : (
                     <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 text-center text-xs text-amber-700 font-semibold">
