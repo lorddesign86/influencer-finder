@@ -96,49 +96,14 @@ export default function BlogSearchPage() {
     return 300000;
   };
 
-  // 필터 및 정렬된 전체 블로그 목록
-  const filteredChannels = useMemo(() => {
-    const list = channels.filter((item) => {
-      if (selectedCategory !== '전체') {
-        const cat = String(item.category || item.specialty || item.tags || '');
-        if (!cat.includes(selectedCategory)) return false;
-      }
-      if (searchQuery.trim() !== '') {
-        const q = searchQuery.toLowerCase();
-        const nameMatch = String(item.name || item.blog_name || '').toLowerCase().includes(q);
-        const handleMatch = String(item.blog_id || item.handle || '').toLowerCase().includes(q);
-        const catMatch = String(item.category || '').toLowerCase().includes(q);
-        return nameMatch || handleMatch || catMatch;
-      }
-      return true;
-    });
-
-    return [...list].sort((a, b) => {
-      if (sortBy === 'fan') return getFans(b) - getFans(a);
-      if (sortBy === 'visit') return getVisitors(b) - getVisitors(a);
-      if (sortBy === 'neighbor') return getNeighbors(b) - getNeighbors(a);
-      if (sortBy === 'price') return getPrice(b) - getPrice(a);
-      return 0;
-    });
-  }, [channels, selectedCategory, searchQuery, sortBy]);
-
-  const displayedChannels = useMemo(() => {
-    return filteredChannels.slice(0, visibleCount);
-  }, [filteredChannels, visibleCount]);
-
-  // 2단계: 현재 화면에 노출되는 블로그들의 포스팅만 타겟팅하여 고속 로드
+  // 2단계: 화면에 노출되는 블로그들의 포스팅 타겟팅 로드
   useEffect(() => {
     async function fetchPostsForVisibleBlogs() {
-      if (!supabase || displayedChannels.length === 0) return;
+      if (!supabase || channels.length === 0) return;
 
-      const blogIds = displayedChannels
-        .map(c => c.blog_id)
-        .filter(Boolean)
-        .map(String);
-
-      const numericIds = displayedChannels
-        .map(c => c.id)
-        .filter(Boolean);
+      // 검색 속도와 정확도를 위해 전체 블로그의 ID 매핑 미리 수집
+      const blogIds = channels.map(c => c.blog_id).filter(Boolean).map(String);
+      const numericIds = channels.map(c => c.id).filter(Boolean);
 
       try {
         const queries: Promise<any>[] = [];
@@ -149,7 +114,7 @@ export default function BlogSearchPage() {
               .from('blog_posts')
               .select('*')
               .in('blog_id', blogIds)
-              .limit(300)
+              .limit(1000)
           );
         }
 
@@ -159,7 +124,7 @@ export default function BlogSearchPage() {
               .from('blog_posts')
               .select('*')
               .in('influencer_id', numericIds)
-              .limit(300)
+              .limit(1000)
           );
         }
 
@@ -176,7 +141,7 @@ export default function BlogSearchPage() {
           const { data: fallbackPosts } = await supabase
             .from('blog_posts')
             .select('*')
-            .limit(500);
+            .limit(1000);
           if (fallbackPosts) combinedPosts = fallbackPosts;
         }
 
@@ -198,7 +163,7 @@ export default function BlogSearchPage() {
                 if (!next[k]) next[k] = [];
                 const postUniqueId = p.id || p.post_id || p.url || p.title;
                 if (
-                  next[k].length < 4 &&
+                  next[k].length < 10 && // 검색을 위해 채널당 최대 10개까지 포스팅 보관
                   !next[k].some(x => (x.id || x.post_id || x.url || x.title) === postUniqueId)
                 ) {
                   next[k].push(p);
@@ -214,7 +179,63 @@ export default function BlogSearchPage() {
     }
 
     fetchPostsForVisibleBlogs();
-  }, [displayedChannels]);
+  }, [channels]);
+
+  // 💡 [핵심 개선] 블로그 이름/ID뿐만 아니라 최신 포스팅의 제목/내용에 검색어가 포함되어 있어도 필터에 걸리도록 개선
+  const filteredChannels = useMemo(() => {
+    const list = channels.filter((item) => {
+      // 1. 카테고리 필터 체크
+      if (selectedCategory !== '전체') {
+        const cat = String(item.category || item.specialty || item.tags || '');
+        if (!cat.includes(selectedCategory)) return false;
+      }
+
+      // 2. 검색어 필터 체크 (이름, 핸들, 카테고리 + 발행된 포스팅 제목/내용까지 확장 검사)
+      if (searchQuery.trim() !== '') {
+        const q = searchQuery.toLowerCase();
+        const nameMatch = String(item.name || item.blog_name || '').toLowerCase().includes(q);
+        const handleMatch = String(item.blog_id || item.handle || '').toLowerCase().includes(q);
+        const catMatch = String(item.category || '').toLowerCase().includes(q);
+
+        // 해당 블로그의 포스팅 목록 가져오기
+        const mapKeys = [
+          String(item.blog_id || '').trim(),
+          String(item.id || '').trim(),
+          String(item.handle || '').trim(),
+          String(item.name || '').trim()
+        ].filter(Boolean);
+
+        let postMatch = false;
+        for (const k of mapKeys) {
+          const blogPosts = postsMap[k] || [];
+          if (blogPosts.some((p: any) => {
+            const title = String(p.title || p.post_title || '').toLowerCase();
+            const content = String(p.content || p.summary || p.description || '').toLowerCase();
+            return title.includes(q) || content.includes(q);
+          })) {
+            postMatch = true;
+            break;
+          }
+        }
+
+        return nameMatch || handleMatch || catMatch || postMatch;
+      }
+
+      return true;
+    });
+
+    return [...list].sort((a, b) => {
+      if (sortBy === 'fan') return getFans(b) - getFans(a);
+      if (sortBy === 'visit') return getVisitors(b) - getVisitors(a);
+      if (sortBy === 'neighbor') return getNeighbors(b) - getNeighbors(a);
+      if (sortBy === 'price') return getPrice(b) - getPrice(a);
+      return 0;
+    });
+  }, [channels, selectedCategory, searchQuery, sortBy, postsMap]);
+
+  const displayedChannels = useMemo(() => {
+    return filteredChannels.slice(0, visibleCount);
+  }, [filteredChannels, visibleCount]);
 
   const getPosts = (item: any) => {
     const mapKeys = [
@@ -226,7 +247,7 @@ export default function BlogSearchPage() {
 
     for (const k of mapKeys) {
       if (postsMap[k] && postsMap[k].length > 0) {
-        return postsMap[k].slice(0, 4);
+        return postsMap[k].slice(0, 4); // 화면 표시는 4개만
       }
     }
 
@@ -356,7 +377,7 @@ export default function BlogSearchPage() {
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <input 
               type="text"
-              placeholder="찾고 싶은 블로그 키워드나 주제를 입력하세요 (예: 화장품, 맛집, 여행)"
+              placeholder="블로그 이름, 키워드(예: 맛집, 화장품, 여행) 입력"
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
@@ -552,7 +573,7 @@ export default function BlogSearchPage() {
                     </div>
                   </div>
 
-                  {/* 중앙 1줄: 4칸 핵심 지표 (모바일 좌우 스크롤 지원) */}
+                  {/* 중앙 1줄: 4칸 핵심 지표 */}
                   <div className="overflow-x-auto no-scrollbar">
                     <div className="flex items-center gap-2.5 min-w-[580px] text-xs">
                       <div className="flex-1 px-3 py-2 bg-slate-50 rounded-xl border border-slate-200/80">
