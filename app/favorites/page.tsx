@@ -17,7 +17,6 @@ export default function FavoritesPage() {
   const [folders, setFolders] = useState<string[]>(['기본 폴더', '관심 캠페인', '섭외 1순위']);
   
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [bulkTargetFolder, setBulkTargetFolder] = useState<string>('');
   const [editingPriceId, setEditingPriceId] = useState<string | null>(null);
   const [tempPrice, setTempPrice] = useState<string>('');
 
@@ -63,19 +62,16 @@ export default function FavoritesPage() {
     setFavorites(Object.values(getFavorites()));
   };
 
-  const handleChangeItemFolder = (id: string, newFolder: string) => {
-    updateFavoriteFolder(id, newFolder);
-    setFavorites(Object.values(getFavorites()));
-  };
-
+  // 선택한 항목들 일괄 폴더 이동 처리 함수
   const handleBulkMoveFolder = (targetFolder: string) => {
     if (!targetFolder || selectedIds.size === 0) return;
+    
     selectedIds.forEach(id => {
       updateFavoriteFolder(id, targetFolder);
     });
+
     setFavorites(Object.values(getFavorites()));
     setSelectedIds(new Set());
-    setBulkTargetFolder('');
     alert(`선택한 ${selectedIds.size}개의 채널이 '${targetFolder}'(으)로 이동되었습니다.`);
   };
 
@@ -154,20 +150,20 @@ export default function FavoritesPage() {
               <Folder size={14} /> 폴더 관리
             </button>
 
-            {/* 선택한 항목 일괄 이동 셀렉트 */}
+            {/* 채널 선택 시에만 나타나는 일괄 이동 바 */}
             {selectedIds.size > 0 && (
               <div className="flex items-center gap-1.5 bg-red-50 border border-red-200 px-3 py-1.5 rounded-xl">
                 <span className="text-xs font-bold text-red-600">{selectedIds.size}개 선택됨:</span>
                 <select 
-                  value={bulkTargetFolder}
+                  defaultValue=""
                   onChange={(e) => {
-                    const val = e.target.value;
-                    setBulkTargetFolder(val);
-                    if (val) {
-                      handleBulkMoveFolder(val);
+                    const target = e.target.value;
+                    if (target) {
+                      handleBulkMoveFolder(target);
+                      e.target.value = ''; // 선택 초기화
                     }
                   }}
-                  className="px-2 py-1 bg-white border border-red-300 rounded-lg text-xs font-bold text-slate-700 focus:outline-none cursor-pointer"
+                  className="px-2.5 py-1 bg-white border border-red-300 rounded-lg text-xs font-bold text-slate-700 focus:outline-none cursor-pointer"
                 >
                   <option value="" disabled>폴더로 이동...</option>
                   {folders.map(f => <option key={f} value={f}>{f}로 이동</option>)}
@@ -194,7 +190,7 @@ export default function FavoritesPage() {
           </div>
         </div>
 
-        {/* 즐겨찾기 리스트 */}
+        {/* 즐겨찾기 리스트 (개별 폴더 셀렉트 제거 및 좌우 스크롤 구조) */}
         {filteredFavorites.length === 0 ? (
           <div className="p-20 text-center text-sm text-slate-400 bg-white rounded-2xl border border-slate-200">
             저장된 즐겨찾기 항목이 없습니다. 탐색 페이지에서 채널을 추가해 보세요!
@@ -202,11 +198,10 @@ export default function FavoritesPage() {
         ) : (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
             <div className="overflow-x-auto w-full">
-              <div className="min-w-[850px] divide-y divide-slate-100">
+              <div className="min-w-[750px] divide-y divide-slate-100">
                 {filteredFavorites.map((item) => {
                   const isChecked = selectedIds.has(item.id);
                   const currentPrice = item.custom_price ?? item.base_price ?? 300000;
-                  const currentItemFolder = item.folder || '기본 폴더';
                   const isYoutube = item.platform === 'youtube';
 
                   return (
@@ -216,7 +211,7 @@ export default function FavoritesPage() {
                         isChecked ? 'bg-red-50/40' : ''
                       }`}
                     >
-                      {/* 1. 왼쪽 고정 영역: 체크박스 + 프로필 & 채널명 */}
+                      {/* 1. 왼쪽 고정 영역: 체크박스 + 프로필 & 채널명 (클릭 시 상세페이지 이동) */}
                       <div className="flex items-center gap-3 min-w-[260px] max-w-[260px] flex-shrink-0 bg-white sticky left-0 z-10 pr-2">
                         <button
                           type="button"
@@ -249,20 +244,9 @@ export default function FavoritesPage() {
                         </div>
                       </div>
 
-                      {/* 2. 오른쪽 스크롤 영역: 폴더 선택, 맞춤 지표, 단가 설정/삭제 */}
-                      <div className="flex items-center gap-6 text-xs text-slate-600 flex-1 justify-end pl-4">
+                      {/* 2. 오른쪽 스크롤 영역: 플랫폼별 맞춤 지표 및 단가 설정/삭제 */}
+                      <div className="flex items-center gap-8 text-xs text-slate-600 flex-1 justify-end pl-4">
                         
-                        {/* 개별 채널 폴더 지정 셀렉트 */}
-                        <div className="flex-shrink-0">
-                          <select
-                            value={currentItemFolder}
-                            onChange={(e) => handleChangeItemFolder(item.id, e.target.value)}
-                            className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-red-500 cursor-pointer"
-                          >
-                            {folders.map(f => <option key={f} value={f}>{f}</option>)}
-                          </select>
-                        </div>
-
                         {/* 플랫폼별 지표 */}
                         {isYoutube ? (
                           <>
