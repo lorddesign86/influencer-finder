@@ -30,7 +30,7 @@ export default function YoutubeInfluencerPage() {
 
   const [channels, setChannels] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dbError, setDbError] = useState<string | null>(null); // 에러 진단용 상태
+  const [dbError, setDbError] = useState<string | null>(null);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [favoritesMap, setFavoritesMap] = useState<Record<string, FavoriteItem>>({});
@@ -42,25 +42,33 @@ export default function YoutubeInfluencerPage() {
     return () => window.removeEventListener('favorites-updated', handleSync);
   }, []);
 
-  // Supabase 데이터 로드 및 연결 상태 진단
+  // Supabase 데이터 로드 (필요시 .from('실제테이블명')으로 변경하세요)
   useEffect(() => {
     const fetchChannels = async () => {
       setLoading(true);
       setDbError(null);
       try {
-        // 💡 주의: 실제 Supabase에 생성된 테이블 이름이 다를 경우 이 부분을 수정하세요 (예: 'youtube_channels', 'channels' 등)
-        const { data, error } = await supabase
-          .from('youtube_influencers') 
-          .select('*')
-          .limit(100);
+        let allChannels: any[] = [];
+        const step = 1000;
+        for (let i = 0; i < 5; i++) {
+          const { data, error } = await supabase
+            .from('channels') // 💡 에러가 난 'youtube_influencers' 대신 'channels'로 변경함 (필요시 실제 테이블명으로 수정)
+            .select('*')
+            .range(i * step, (i + 1) * step - 1);
 
-        if (error) {
-          console.error('Supabase 에러 발생:', error);
-          setDbError(`DB 에러: ${error.message} (코드: ${error.code})`);
-        } else if (data) {
-          console.log('불러온 유튜버 데이터:', data.length);
-          setChannels(data);
+          if (error) {
+            console.error('유튜버 로드 에러:', error);
+            setDbError(`DB 에러: ${error.message} (코드: ${error.code})`);
+            break;
+          }
+          if (data && data.length > 0) {
+            allChannels = allChannels.concat(data);
+            if (data.length < step) break;
+          } else {
+            break;
+          }
         }
+        setChannels(allChannels);
       } catch (err: any) {
         console.error('네트워크/연결 예외:', err);
         setDbError(`연결 실패: ${err.message || '알 수 없는 오류'}`);
