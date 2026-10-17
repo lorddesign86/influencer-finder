@@ -3,15 +3,28 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
-  getFavorites, removeFavoriteItem, FavoriteItem 
-} from '@/lib/favorites';
-import { 
   Bookmark, Folder, Download, Plus, Trash2, Edit3, Check, X 
 } from 'lucide-react';
 
+interface FavoriteItem {
+  id: string;
+  platform: 'youtube' | 'blog';
+  name: string;
+  handle: string;
+  profile_img_url: string;
+  tags?: string[];
+  metric1: number;
+  metric2: number;
+  metric3?: number;
+  base_price: number;
+  custom_memo?: string;
+  folder?: string;
+  added_at: string;
+}
+
 export default function FavoritesPage() {
   const router = useRouter();
-  const [favorites, setFavorites] = useState<FavoriteItem[]>([]);
+  const [favoritesMap, setFavoritesMap] = useState<Record<string, FavoriteItem>>({});
   const [activeTab, setActiveTab] = useState<'all' | 'youtube' | 'blog'>('all');
   const [selectedFolder, setSelectedFolder] = useState<string>('전체보기');
   const [folders, setFolders] = useState<string[]>(['기본 폴더', '관심 캠페인', '섭외 1순위']);
@@ -23,9 +36,19 @@ export default function FavoritesPage() {
   const [editingMemoKey, setEditingMemoKey] = useState<string | null>(null);
   const [tempMemo, setTempMemo] = useState<string>('');
 
+  // 로컬 스토리지에서 직접 데이터 로드
   const loadFavoritesData = () => {
-    const favMap = getFavorites();
-    setFavorites(Object.values(favMap));
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = localStorage.getItem('findlist_favorites');
+      if (raw) {
+        setFavoritesMap(JSON.parse(raw));
+      } else {
+        setFavoritesMap({});
+      }
+    } catch (e) {
+      setFavoritesMap({});
+    }
   };
 
   useEffect(() => {
@@ -35,7 +58,9 @@ export default function FavoritesPage() {
     return () => window.removeEventListener('favorites-updated', handleSync);
   }, []);
 
-  const filteredFavorites = favorites.filter(item => {
+  const favoritesList = Object.entries(favoritesMap);
+
+  const filteredFavorites = favoritesList.filter(([key, item]) => {
     if (activeTab === 'youtube' && item.platform !== 'youtube') return false;
     if (activeTab === 'blog' && item.platform !== 'blog') return false;
     const itemFolder = item.folder || '기본 폴더';
@@ -43,7 +68,7 @@ export default function FavoritesPage() {
     return true;
   });
 
-  const totalEstimatedPrice = filteredFavorites.reduce((sum, item) => {
+  const totalEstimatedPrice = filteredFavorites.reduce((sum, [_, item]) => {
     return sum + (item.base_price ?? 300000);
   }, 0);
 
@@ -56,22 +81,37 @@ export default function FavoritesPage() {
     });
   };
 
+  // 즐겨찾기 항목 삭제
   const handleRemove = (itemKey: string) => {
     if (confirm('이 채널을 즐겨찾기에서 삭제하시겠습니까?')) {
-      removeFavoriteItem(itemKey);
+      try {
+        const raw = localStorage.getItem('findlist_favorites');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          delete parsed[itemKey];
+          localStorage.setItem('findlist_favorites', JSON.stringify(parsed));
+          window.dispatchEvent(new Event('favorites-updated'));
+        }
+      } catch (e) {
+        console.error(e);
+      }
       loadFavoritesData();
       selectedKeys.delete(itemKey);
       setSelectedKeys(new Set(selectedKeys));
     }
   };
 
+  // 메모 저장
   const handleSaveMemo = (itemKey: string) => {
     try {
-      const favs = getFavorites();
-      if (favs[itemKey]) {
-        favs[itemKey].custom_memo = tempMemo;
-        localStorage.setItem('findlist_favorites', JSON.stringify(favs));
-        window.dispatchEvent(new Event('favorites-updated'));
+      const raw = localStorage.getItem('findlist_favorites');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed[itemKey]) {
+          parsed[itemKey].custom_memo = tempMemo;
+          localStorage.setItem('findlist_favorites', JSON.stringify(parsed));
+          window.dispatchEvent(new Event('favorites-updated'));
+        }
       }
     } catch (e) {
       console.error(e);
@@ -80,18 +120,21 @@ export default function FavoritesPage() {
     loadFavoritesData();
   };
 
-  // 선택한 채널들 일괄 폴더 이동 (정확한 키값 매칭 및 즉시 저장)
+  // 체크한 채널들 일괄 폴더 이동
   const handleBulkMoveFolder = (targetFolder: string) => {
     if (selectedKeys.size === 0) return;
     try {
-      const favs = getFavorites();
-      selectedKeys.forEach(itemKey => {
-        if (favs[itemKey]) {
-          favs[itemKey].folder = targetFolder;
-        }
-      });
-      localStorage.setItem('findlist_favorites', JSON.stringify(favs));
-      window.dispatchEvent(new Event('favorites-updated'));
+      const raw = localStorage.getItem('findlist_favorites');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        selectedKeys.forEach(itemKey => {
+          if (parsed[itemKey]) {
+            parsed[itemKey].folder = targetFolder;
+          }
+        });
+        localStorage.setItem('findlist_favorites', JSON.stringify(parsed));
+        window.dispatchEvent(new Event('favorites-updated'));
+      }
     } catch (e) {
       console.error(e);
     }
@@ -119,14 +162,17 @@ export default function FavoritesPage() {
     }
     if (confirm(`'${folderToDelete}' 폴더를 삭제하시겠습니까? 해당 폴더에 있던 채널들은 '기본 폴더'로 이동됩니다.`)) {
       try {
-        const favs = getFavorites();
-        Object.keys(favs).forEach(k => {
-          if ((favs[k].folder || '기본 폴더') === folderToDelete) {
-            favs[k].folder = '기본 폴더';
-          }
-        });
-        localStorage.setItem('findlist_favorites', JSON.stringify(favs));
-        window.dispatchEvent(new Event('favorites-updated'));
+        const raw = localStorage.getItem('findlist_favorites');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          Object.keys(parsed).forEach(k => {
+            if ((parsed[k].folder || '기본 폴더') === folderToDelete) {
+              parsed[k].folder = '기본 폴더';
+            }
+          });
+          localStorage.setItem('findlist_favorites', JSON.stringify(parsed));
+          window.dispatchEvent(new Event('favorites-updated'));
+        }
       } catch (e) {
         console.error(e);
       }
@@ -167,9 +213,9 @@ export default function FavoritesPage() {
         {/* 탭 네비게이션 */}
         <div className="max-w-6xl mx-auto flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar border-b border-slate-100">
           {[
-            { key: 'all', label: `전체 채널 (${favorites.length})` },
-            { key: 'youtube', label: `유튜브 채널 (${favorites.filter(i => i.platform === 'youtube').length})` },
-            { key: 'blog', label: `블로그 인플루언서 (${favorites.filter(i => i.platform === 'blog').length})` },
+            { key: 'all', label: `전체 채널 (${favoritesList.length})` },
+            { key: 'youtube', label: `유튜브 채널 (${favoritesList.filter(([_, i]) => i.platform === 'youtube').length})` },
+            { key: 'blog', label: `블로그 인플루언서 (${favoritesList.filter(([_, i]) => i.platform === 'blog').length})` },
           ].map(tab => (
             <button
               key={tab.key}
@@ -255,8 +301,7 @@ export default function FavoritesPage() {
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
             <div className="overflow-x-auto w-full">
               <div className="min-w-[800px] divide-y divide-slate-100">
-                {filteredFavorites.map((item) => {
-                  const itemKey = `${item.platform}_${item.id}`;
+                {filteredFavorites.map(([itemKey, item]) => {
                   const isChecked = selectedKeys.has(itemKey);
                   const currentMemo = item.custom_memo || '';
                   const isYoutube = item.platform === 'youtube';
