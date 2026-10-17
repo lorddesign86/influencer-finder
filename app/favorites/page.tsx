@@ -61,6 +61,15 @@ export default function FavoritesPage() {
     setFavorites(Object.values(getFavorites()));
   };
 
+  // 상세 페이지 이동 함수
+  const goToDetail = (item: FavoriteItem) => {
+    if (item.platform === 'youtube') {
+      router.push(`/youtube/${item.id}`);
+    } else {
+      router.push(`/blog/${item.id}`);
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col h-full bg-[#f8f9fa] overflow-y-auto relative pb-24">
       
@@ -145,7 +154,7 @@ export default function FavoritesPage() {
           </div>
         </div>
 
-        {/* 즐겨찾기 리스트 (왼쪽 프로필 고정 + 오른쪽 좌우 스크롤 구조) */}
+        {/* 즐겨찾기 리스트 (프로필 클릭 시 상세페이지 이동 연결) */}
         {filteredFavorites.length === 0 ? (
           <div className="p-20 text-center text-sm text-slate-400 bg-white rounded-2xl border border-slate-200">
             저장된 즐겨찾기 항목이 없습니다. 탐색 페이지에서 채널을 추가해 보세요!
@@ -166,7 +175,7 @@ export default function FavoritesPage() {
                         isChecked ? 'bg-red-50/40' : ''
                       }`}
                     >
-                      {/* 1. 왼쪽 고정 영역: 체크박스 + 프로필 & 채널명 */}
+                      {/* 1. 왼쪽 고정 영역: 체크박스 + 프로필 & 채널명 (클릭 시 상세페이지 이동) */}
                       <div className="flex items-center gap-3 min-w-[260px] max-w-[260px] flex-shrink-0 bg-white sticky left-0 z-10 pr-2">
                         <button
                           type="button"
@@ -182,11 +191,13 @@ export default function FavoritesPage() {
                           src={item.profile_img_url} 
                           alt="" 
                           referrerPolicy="no-referrer"
-                          className="w-10 h-10 rounded-full border border-slate-200 object-cover flex-shrink-0"
+                          onClick={() => goToDetail(item)}
+                          className="w-10 h-10 rounded-full border border-slate-200 object-cover flex-shrink-0 cursor-pointer hover:opacity-80 transition"
+                          title="상세 페이지로 이동"
                         />
-                        <div className="min-w-0 flex-1">
+                        <div className="min-w-0 flex-1 cursor-pointer" onClick={() => goToDetail(item)}>
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <h3 className="text-xs md:text-sm font-bold text-slate-900 truncate">{item.name}</h3>
+                            <h3 className="text-xs md:text-sm font-bold text-slate-900 truncate hover:text-red-500 transition">{item.name}</h3>
                             <span className={`text-[9px] px-1.5 py-0.5 font-extrabold rounded uppercase ${
                               isYoutube ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
                             }`}>
