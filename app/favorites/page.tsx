@@ -145,145 +145,149 @@ export default function FavoritesPage() {
           </div>
         </div>
 
-        {/* 즐겨찾기 리스트 (플랫폼별 맞춤 지표 가로 한 줄 배치) */}
+        {/* 즐겨찾기 리스트 (왼쪽 프로필 고정 + 오른쪽 좌우 스크롤 구조) */}
         {filteredFavorites.length === 0 ? (
           <div className="p-20 text-center text-sm text-slate-400 bg-white rounded-2xl border border-slate-200">
             저장된 즐겨찾기 항목이 없습니다. 탐색 페이지에서 채널을 추가해 보세요!
           </div>
         ) : (
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden divide-y divide-slate-100">
-            {filteredFavorites.map((item) => {
-              const isChecked = selectedIds.has(item.id);
-              const currentPrice = item.custom_price ?? item.base_price ?? 300000;
-              const isYoutube = item.platform === 'youtube';
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
+            <div className="overflow-x-auto w-full">
+              <div className="min-w-[750px] divide-y divide-slate-100">
+                {filteredFavorites.map((item) => {
+                  const isChecked = selectedIds.has(item.id);
+                  const currentPrice = item.custom_price ?? item.base_price ?? 300000;
+                  const isYoutube = item.platform === 'youtube';
 
-              return (
-                <div 
-                  key={item.id}
-                  className={`px-4 py-3.5 flex items-center justify-between gap-4 transition hover:bg-slate-50/80 ${
-                    isChecked ? 'bg-red-50/40' : ''
-                  }`}
-                >
-                  {/* 좌측: 체크박스 + 프로필 & 채널명 */}
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <button
-                      type="button"
-                      onClick={() => toggleSelect(item.id)}
-                      className={`w-5 h-5 rounded-md flex items-center justify-center border transition cursor-pointer flex-shrink-0 ${
-                        isChecked ? 'bg-red-500 border-red-500 text-white' : 'bg-white border-slate-300 hover:border-red-500'
+                  return (
+                    <div 
+                      key={item.id}
+                      className={`flex items-center justify-between px-4 py-3 transition hover:bg-slate-50/80 ${
+                        isChecked ? 'bg-red-50/40' : ''
                       }`}
                     >
-                      {isChecked && <Check size={13} strokeWidth={3} />}
-                    </button>
-
-                    <img 
-                      src={item.profile_img_url} 
-                      alt="" 
-                      referrerPolicy="no-referrer"
-                      className="w-10 h-10 rounded-full border border-slate-200 object-cover flex-shrink-0"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <h3 className="text-xs md:text-sm font-bold text-slate-900 truncate">{item.name}</h3>
-                        <span className={`text-[9px] px-1.5 py-0.5 font-extrabold rounded uppercase ${
-                          isYoutube ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                        }`}>
-                          {item.platform}
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-slate-400 truncate">@{item.handle}</p>
-                    </div>
-                  </div>
-
-                  {/* 중앙: 플랫폼별 맞춤 지표 (유튜브: 구독자/롱폼/숏츠 vs 블로그: 팬/이웃/일방문자) */}
-                  <div className="hidden sm:flex items-center gap-6 text-xs text-slate-600 flex-shrink-0">
-                    {isYoutube ? (
-                      <>
-                        <div className="text-right">
-                          <span className="text-[10px] text-slate-400 block">구독자 수</span>
-                          <strong className="text-slate-900 font-black">{(item.metric1 || 0).toLocaleString()}명</strong>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-[10px] text-slate-400 block">평균 조회수(롱폼)</span>
-                          <strong className="text-red-500 font-black">{(item.metric2 || 0).toLocaleString()}회</strong>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-[10px] text-slate-400 block">평균 조회수(숏츠)</span>
-                          <strong className="text-slate-800 font-black">{(item.metric3 || 0).toLocaleString()}회</strong>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div className="text-right">
-                          <span className="text-[10px] text-slate-400 block">팬 수</span>
-                          <strong className="text-slate-900 font-black">{(item.metric1 || 0).toLocaleString()}명</strong>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-[10px] text-slate-400 block">이웃 수</span>
-                          <strong className="text-slate-900 font-black">{(item.metric3 || 0).toLocaleString()}명</strong>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-[10px] text-slate-400 block">일방문자수</span>
-                          <strong className="text-emerald-600 font-black">{(item.metric2 || 0).toLocaleString()}명</strong>
-                        </div>
-                      </>
-                    )}
-                  </div>
-
-                  {/* 우측: 예상 광고 단가 및 수정/삭제 버튼 */}
-                  <div className="flex items-center gap-4 flex-shrink-0">
-                    <div className="text-right">
-                      <span className="text-[10px] text-slate-400 block">예상 광고 단가</span>
-                      {editingPriceId === item.id ? (
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <input 
-                            type="text"
-                            value={tempPrice}
-                            onChange={(e) => setTempPrice(e.target.value)}
-                            placeholder={currentPrice.toString()}
-                            className="w-24 px-2 py-1 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500"
-                          />
-                          <button 
-                            type="button"
-                            onClick={() => handleSavePrice(item.id)}
-                            className="px-2 py-1 bg-red-500 text-white rounded-lg text-[11px] font-bold"
-                          >
-                            저장
-                          </button>
-                        </div>
-                      ) : (
-                        <strong className="text-xs md:text-sm font-black text-red-600">{currentPrice.toLocaleString()}원</strong>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-1">
-                      {editingPriceId !== item.id && (
+                      {/* 1. 왼쪽 고정 영역: 체크박스 + 프로필 & 채널명 */}
+                      <div className="flex items-center gap-3 min-w-[260px] max-w-[260px] flex-shrink-0 bg-white sticky left-0 z-10 pr-2">
                         <button
                           type="button"
-                          onClick={() => {
-                            setEditingPriceId(item.id);
-                            setTempPrice(currentPrice.toString());
-                          }}
-                          className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs transition cursor-pointer"
-                          title="단가 수정"
+                          onClick={() => toggleSelect(item.id)}
+                          className={`w-5 h-5 rounded-md flex items-center justify-center border transition cursor-pointer flex-shrink-0 ${
+                            isChecked ? 'bg-red-500 border-red-500 text-white' : 'bg-white border-slate-300 hover:border-red-500'
+                          }`}
                         >
-                          <Edit3 size={14} />
+                          {isChecked && <Check size={13} strokeWidth={3} />}
                         </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => handleRemove(item.id)}
-                        className="p-2 bg-slate-100 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-xl text-xs transition cursor-pointer"
-                        title="삭제"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </div>
 
-                </div>
-              );
-            })}
+                        <img 
+                          src={item.profile_img_url} 
+                          alt="" 
+                          referrerPolicy="no-referrer"
+                          className="w-10 h-10 rounded-full border border-slate-200 object-cover flex-shrink-0"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <h3 className="text-xs md:text-sm font-bold text-slate-900 truncate">{item.name}</h3>
+                            <span className={`text-[9px] px-1.5 py-0.5 font-extrabold rounded uppercase ${
+                              isYoutube ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                            }`}>
+                              {item.platform}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-400 truncate">@{item.handle}</p>
+                        </div>
+                      </div>
+
+                      {/* 2. 오른쪽 스크롤 영역: 플랫폼별 맞춤 지표 및 단가 설정/삭제 */}
+                      <div className="flex items-center gap-8 text-xs text-slate-600 flex-1 justify-end pl-4">
+                        {isYoutube ? (
+                          <>
+                            <div className="text-right w-24 flex-shrink-0">
+                              <span className="text-[10px] text-slate-400 block">구독자 수</span>
+                              <strong className="text-slate-900 font-black">{(item.metric1 || 0).toLocaleString()}명</strong>
+                            </div>
+                            <div className="text-right w-28 flex-shrink-0">
+                              <span className="text-[10px] text-slate-400 block">평균 조회수(롱폼)</span>
+                              <strong className="text-red-500 font-black">{(item.metric2 || 0).toLocaleString()}회</strong>
+                            </div>
+                            <div className="text-right w-28 flex-shrink-0">
+                              <span className="text-[10px] text-slate-400 block">평균 조회수(숏츠)</span>
+                              <strong className="text-slate-800 font-black">{(item.metric3 || 0).toLocaleString()}회</strong>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="text-right w-24 flex-shrink-0">
+                              <span className="text-[10px] text-slate-400 block">팬 수</span>
+                              <strong className="text-slate-900 font-black">{(item.metric1 || 0).toLocaleString()}명</strong>
+                            </div>
+                            <div className="text-right w-24 flex-shrink-0">
+                              <span className="text-[10px] text-slate-400 block">이웃 수</span>
+                              <strong className="text-slate-900 font-black">{(item.metric3 || 0).toLocaleString()}명</strong>
+                            </div>
+                            <div className="text-right w-28 flex-shrink-0">
+                              <span className="text-[10px] text-slate-400 block">일방문자수</span>
+                              <strong className="text-emerald-600 font-black">{(item.metric2 || 0).toLocaleString()}명</strong>
+                            </div>
+                          </>
+                        )}
+
+                        {/* 예상 광고 단가 및 수정/삭제 버튼 */}
+                        <div className="flex items-center gap-4 flex-shrink-0 border-l border-slate-100 pl-6">
+                          <div className="text-right w-28">
+                            <span className="text-[10px] text-slate-400 block">예상 광고 단가</span>
+                            {editingPriceId === item.id ? (
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <input 
+                                  type="text"
+                                  value={tempPrice}
+                                  onChange={(e) => setTempPrice(e.target.value)}
+                                  placeholder={currentPrice.toString()}
+                                  className="w-24 px-2 py-1 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500"
+                                />
+                                <button 
+                                  type="button"
+                                  onClick={() => handleSavePrice(item.id)}
+                                  className="px-2 py-1 bg-red-500 text-white rounded-lg text-[11px] font-bold"
+                                >
+                                  저장
+                                </button>
+                              </div>
+                            ) : (
+                              <strong className="text-xs md:text-sm font-black text-red-600">{currentPrice.toLocaleString()}원</strong>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1">
+                            {editingPriceId !== item.id && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingPriceId(item.id);
+                                  setTempPrice(currentPrice.toString());
+                                }}
+                                className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs transition cursor-pointer"
+                                title="단가 수정"
+                              >
+                                <Edit3 size={14} />
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleRemove(item.id)}
+                              className="p-2 bg-slate-100 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-xl text-xs transition cursor-pointer"
+                              title="삭제"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         )}
       </div>
