@@ -13,11 +13,10 @@ export default function YoutubeSearchPage() {
   const [favoritesMap, setFavoritesMap] = useState<Record<string, any>>({});
   const [isProMode, setIsProMode] = useState(true);
 
-  // Supabase influencers 테이블 구조에 완벽히 맞춘 유튜브 데이터
-  const [channels, setChannels] = useState([
+  // 네트워크 지연 없는 즉시 로딩형 데이터 구조 (콘텐츠 데이터를 객체 내에 포함)
+  const [channels] = useState([
     {
       id: '1',
-      channel_id: '@Hyo_LevelUp',
       name: "효연의 레벨업 Hyo's Level Up",
       handle: 'Hyo_LevelUp',
       category: '엔터테인먼트',
@@ -35,7 +34,6 @@ export default function YoutubeSearchPage() {
     },
     {
       id: '3',
-      channel_id: 'UC7fnlzW2FdBO4sSY82c_iw',
       name: '쏘울맛집',
       handle: 'soul_matjip',
       category: '푸드',
@@ -53,7 +51,6 @@ export default function YoutubeSearchPage() {
     },
     {
       id: '13',
-      channel_id: 'UCdCjkjZtf-1WJyPPIETf1g',
       name: 'ITSub잇섭',
       handle: 'itsub',
       category: 'IT테크',
@@ -254,7 +251,7 @@ export default function YoutubeSearchPage() {
           </div>
         </div>
 
-        {/* 유튜브 카드 리스트 */}
+        {/* 유튜브 카드 리스트 (지연 없는 즉시 렌더링) */}
         <div className="space-y-4">
           {filteredChannels.map((item) => {
             const isChecked = selectedIds.has(item.id);
