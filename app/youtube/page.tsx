@@ -7,7 +7,7 @@ import {
   getFavorites, toggleFavoriteItem, FavoriteItem 
 } from '@/lib/favorites';
 import { 
-  Search, ChevronRight, Mail, Bookmark, Check, ArrowUpDown 
+  Search, ChevronRight, Mail, Bookmark, Check, ArrowUpDown, AlertCircle 
 } from 'lucide-react';
 
 const YOUTUBE_CATEGORIES = [
@@ -30,6 +30,7 @@ export default function YoutubeInfluencerPage() {
 
   const [channels, setChannels] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dbError, setDbError] = useState<string | null>(null); // 에러 진단용 상태
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [favoritesMap, setFavoritesMap] = useState<Record<string, FavoriteItem>>({});
@@ -41,31 +42,28 @@ export default function YoutubeInfluencerPage() {
     return () => window.removeEventListener('favorites-updated', handleSync);
   }, []);
 
-  // 유튜브 인플루언서 전체 데이터 로드 (필요시 .from('실제테이블명')으로 수정 가능)
+  // Supabase 데이터 로드 및 연결 상태 진단
   useEffect(() => {
     const fetchChannels = async () => {
       setLoading(true);
+      setDbError(null);
       try {
-        let allChannels: any[] = [];
-        const step = 1000;
-        for (let i = 0; i < 5; i++) {
-          const { data, error } = await supabase
-            .from('youtube_influencers') // 또는 channels / youtube_channels
-            .select('*')
-            .range(i * step, (i + 1) * step - 1);
+        // 💡 주의: 실제 Supabase에 생성된 테이블 이름이 다를 경우 이 부분을 수정하세요 (예: 'youtube_channels', 'channels' 등)
+        const { data, error } = await supabase
+          .from('youtube_influencers') 
+          .select('*')
+          .limit(100);
 
-          if (error) {
-            console.error('유튜버 로드 에러:', error);
-            break;
-          }
-          if (data && data.length > 0) {
-            allChannels = allChannels.concat(data);
-            if (data.length < step) break;
-          } else {
-            break;
-          }
+        if (error) {
+          console.error('Supabase 에러 발생:', error);
+          setDbError(`DB 에러: ${error.message} (코드: ${error.code})`);
+        } else if (data) {
+          console.log('불러온 유튜버 데이터:', data.length);
+          setChannels(data);
         }
-        setChannels(allChannels);
+      } catch (err: any) {
+        console.error('네트워크/연결 예외:', err);
+        setDbError(`연결 실패: ${err.message || '알 수 없는 오류'}`);
       } finally {
         setLoading(false);
       }
@@ -143,10 +141,9 @@ export default function YoutubeInfluencerPage() {
   return (
     <div className="flex-1 flex flex-col h-full bg-[#f8f9fa] overflow-y-auto relative pb-24">
       
-      {/* 1. 상단 영역 압축 및 모바일 최적화된 대형 검색창 */}
+      {/* 상단 검색 영역 */}
       <div className="bg-white border-b border-slate-200 px-3 md:px-6 py-2.5 sticky top-0 z-20 space-y-2 shadow-2xs">
         <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-2">
-          
           <div className="relative w-full flex-1">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
             <input 
@@ -223,14 +220,25 @@ export default function YoutubeInfluencerPage() {
           <span className="text-[11px] font-bold text-slate-500">검색 결과: {displayedChannels.totalCount}개</span>
         </div>
 
-        {/* 유튜버 리스트 카드 영역 (모바일 깨짐 방지 세로형 및 2x2 그리드 배치) */}
+        {/* 데이터베이스 에러 발생 시 화면에 안내 표시 */}
+        {dbError && (
+          <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-600 text-xs flex items-center gap-2">
+            <AlertCircle size={16} className="flex-shrink-0" />
+            <div>
+              <p className="font-bold">데이터베이스 연동 오류:</p>
+              <p>{dbError}</p>
+            </div>
+          </div>
+        )}
+
+        {/* 유튜버 리스트 카드 영역 */}
         {loading ? (
           <div className="p-16 text-center text-xs text-slate-400 bg-white rounded-2xl border border-slate-200">
             유튜버 목록을 불러오는 중입니다...
           </div>
         ) : displayedChannels.list.length === 0 ? (
           <div className="p-16 text-center text-xs text-slate-400 bg-white rounded-2xl border border-slate-200">
-            조건에 일치하는 유튜버가 없습니다.
+            {dbError ? '데이터베이스 연결을 확인해주세요.' : '조건에 일치하는 유튜버가 없습니다.'}
           </div>
         ) : (
           displayedChannels.list.map((channel) => {
@@ -249,7 +257,6 @@ export default function YoutubeInfluencerPage() {
                   isChecked ? 'border-red-500 ring-2 ring-red-100' : 'border-slate-200'
                 }`}
               >
-                {/* 상단 프로필 영역 */}
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
@@ -273,7 +280,6 @@ export default function YoutubeInfluencerPage() {
                   </div>
                 </div>
 
-                {/* 모바일에서 버튼이 찌그러지지 않는 3분할 액션 버튼 */}
                 <div className="grid grid-cols-3 gap-1.5 text-xs font-bold">
                   <button
                     type="button"
@@ -303,7 +309,6 @@ export default function YoutubeInfluencerPage() {
                   </button>
                 </div>
 
-                {/* 하단 지표 2x2 그리드 (모바일 화면 최적화) */}
                 <div className="grid grid-cols-2 gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-100 text-xs">
                   <div className="bg-white p-2.5 rounded-lg border border-slate-100">
                     <span className="text-[10px] text-slate-400 block">구독자 수</span>
