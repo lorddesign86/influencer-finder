@@ -49,12 +49,12 @@ export default function RootLayout({
                   >
                     <Film size={18} /> 영상 라이브러리
                   </button>
-                  <button 
-                    type="button"
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 transition"
-                  >
-                    <Bookmark size={18} /> 즐겨찾기
-                  </button>
+                  <Link
+                href="/favorites"
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 transition"
+                >
+                <Bookmark size={18} /> 즐겨찾기
+                </Link>
                 </nav>
               </div>
 
