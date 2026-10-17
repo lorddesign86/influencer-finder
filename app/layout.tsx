@@ -103,11 +103,11 @@ export default function RootLayout({
 
               {/* 하단 사업자 정보 및 카피라이트 영역 */}
               <div className="pt-4 border-t border-slate-100 text-[11px] text-slate-400 space-y-1 px-3 leading-relaxed">
-                <p className="font-bold text-slate-500">상호명: (주)파인드리스트</p>
-                <p>대표이사: 박종범</p>
+                <p className="font-bold text-slate-500">상호명: 파인리스트</p>
+                <p>대표이사: 백동진</p>
                 <p>이메일: contact@findlist.co.kr</p>
                 <p>주소: 서울특별시 강남구 봉은사로 524</p>
-                <p className="pt-1">사업자등록번호: 841-88-01562</p>
+                <p className="pt-1">비이케이 사업자등록번호: 841-88-01562</p>
                 <p>통신판매업: 제 2026-성남분당A-0912호</p>
                 <p className="pt-3 text-[10px] text-slate-300">
                   Copyright 2026 FINDLIST. All Right Reserved.
