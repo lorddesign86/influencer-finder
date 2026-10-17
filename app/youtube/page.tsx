@@ -11,6 +11,12 @@ const YOUTUBE_CATEGORIES = [
   '전체', '맛집', '먹방', '여행', 'Vlog', 'IT', '뷰티', '패션', '게임', '경제'
 ];
 
+// 채널 ID 정규화 헬퍼 (앞뒤 공백 및 앞에 붙은 @ 제거)
+const cleanId = (val: any): string => {
+  if (!val) return '';
+  return String(val).trim().replace(/^@+/, '');
+};
+
 export default function YoutubeDashboardPage() {
   const router = useRouter();
   const [isProUser, setIsProUser] = useState(false);
@@ -19,34 +25,84 @@ export default function YoutubeDashboardPage() {
   
   const [channels, setChannels] = useState<any[]>([]);
   const [postsMap, setPostsMap] = useState<Record<string, any[]>>({});
+  const [matchedPostChannelIds, setMatchedPostChannelIds] = useState<Set<string>>(new Set());
+  
   const [loading, setLoading] = useState(true);
   const [postsLoading, setPostsLoading] = useState(false);
 
-  // 1단계: 채널 목록만 먼저 초고속으로 로드 (화면 멈춤 원천 차단)
+  // 1. 초기 채널 전체 로드 (500개 제한 해제 -> 다중 페이지로 전체 채널 안전하게 확보)
   useEffect(() => {
-    const fetchChannels = async () => {
+    const fetchAllChannels = async () => {
       setLoading(true);
       try {
-        const { data, error } = await supabase
-          .from('influencers')
-          .select('*')
-          .limit(500);
+        let allChannels: any[] = [];
+        const step = 1000;
+        for (let i = 0; i < 5; i++) {
+          const { data, error } = await supabase
+            .from('influencers')
+            .select('*')
+            .range(i * step, (i + 1) * step - 1);
 
-        if (error) {
-          console.error('채널 로드 에러:', error);
-        } else if (data) {
-          setChannels(data);
+          if (error) {
+            console.error('채널 로드 에러:', error);
+            break;
+          }
+          if (data && data.length > 0) {
+            allChannels = allChannels.concat(data);
+            if (data.length < step) break;
+          } else {
+            break;
+          }
         }
+        setChannels(allChannels);
       } catch (err) {
         console.error('예외 발생:', err);
       } finally {
         setLoading(false);
       }
     };
-    fetchChannels();
+    fetchAllChannels();
   }, []);
 
-  // 화면에 보여줄 채널 필터링 및 정렬
+  // 2. 검색어 또는 카테고리 변경 시: `influencer_posts`의 영상 제목(title)까지 검색하여 채널 ID 역추적
+  useEffect(() => {
+    const keyword = search.trim() || (selectedTag !== '전체' ? selectedTag : '');
+    if (!keyword) {
+      setMatchedPostChannelIds(new Set());
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        const keywords = keyword.split(/\s+/).filter(Boolean);
+        // 첫 번째 핵심 키워드로 최신 영상 제목 및 설명 검색
+        const mainKw = keywords[0];
+        const { data: matchedPosts } = await supabase
+          .from('influencer_posts')
+          .select('channel_id, title, thumbnail_url, view_count, published_at')
+          .ilike('title', `%${mainKw}%`)
+          .order('published_at', { ascending: false })
+          .limit(300);
+
+        if (matchedPosts && matchedPosts.length > 0) {
+          const cidSet = new Set<string>();
+          matchedPosts.forEach((p: any) => {
+            const cid = cleanId(p.channel_id).toLowerCase();
+            if (cid) cidSet.add(cid);
+          });
+          setMatchedPostChannelIds(cidSet);
+        } else {
+          setMatchedPostChannelIds(new Set());
+        }
+      } catch (err) {
+        console.error('포스트 키워드 역추적 에러:', err);
+      }
+    }, 200);
+
+    return () => clearTimeout(timer);
+  }, [search, selectedTag]);
+
+  // 3. 채널 필터링 (채널 모든 텍스트 필드 + 역추적된 영상 제목 매칭 채널 통합)
   const displayedChannels = useMemo(() => {
     const q = search.trim().toLowerCase();
     
@@ -57,82 +113,108 @@ export default function YoutubeDashboardPage() {
 
     const targetList = youtubeChannels.length > 0 ? youtubeChannels : channels;
 
+    // 검색어와 태그가 모두 없을 때만 기본 베스트 5 노출
     if (!q && selectedTag === '전체') {
       const sorted = [...targetList].sort((a, b) => {
         const subA = Number(a.follower_count ?? a.follwer_count ?? a.subscriber_count ?? a.subscribers ?? 0);
         const subB = Number(b.follower_count ?? b.follwer_count ?? b.subscriber_count ?? b.subscribers ?? 0);
         return subB - subA;
       });
-      return { list: sorted.slice(0, 5), isDefaultRecommend: true };
+      return { list: sorted.slice(0, 5), totalCount: sorted.length, isDefaultRecommend: true };
     }
 
     const filtered = targetList.filter((item) => {
-      const tags = Array.isArray(item.tags) ? item.tags.map((t: string) => t.toLowerCase()) : [];
-      const matchesCat = selectedTag === '전체' || 
-        tags.some(t => t.includes(selectedTag.toLowerCase())) || 
-        (item.name || '').toLowerCase().includes(selectedTag.toLowerCase());
+      const cIdLower = cleanId(item.channel_id).toLowerCase();
+      const handleLower = cleanId(item.handle).toLowerCase();
 
-      if (!matchesCat) return false;
+      // 채널의 모든 텍스트 정보 통합 문자열 생성 (이름, 핸들, 카테고리, 소개글, 태그 등)
+      const tagsStr = Array.isArray(item.tags) 
+        ? item.tags.join(' ') 
+        : String(item.tags || '');
+      
+      const fullChannelText = [
+        item.name,
+        item.handle,
+        item.channel_id,
+        item.category,
+        item.description,
+        item.bio,
+        item.keywords,
+        tagsStr
+      ].filter(Boolean).join(' ').toLowerCase();
+
+      // 영상 제목에서 매칭된 채널인지 확인
+      const isMatchedFromPosts = matchedPostChannelIds.has(cIdLower) || matchedPostChannelIds.has(handleLower);
+
+      // 카테고리 태그 필터 확인
+      if (selectedTag !== '전체') {
+        const catLower = selectedTag.toLowerCase();
+        const catMatch = fullChannelText.includes(catLower) || isMatchedFromPosts;
+        if (!catMatch) return false;
+      }
+
+      // 검색어 필터 확인
       if (!q) return true;
 
       const keywords = q.split(/\s+/).filter(Boolean);
-      const nameRaw = (item.name || '').toLowerCase();
-      const handleRaw = (item.handle || item.channel_id || '').toLowerCase();
+      const textMatch = keywords.some(kw => fullChannelText.includes(kw));
 
-      return keywords.some(kw => 
-        nameRaw.includes(kw) || 
-        handleRaw.includes(kw) || 
-        tags.some(t => t.includes(kw))
-      );
+      return textMatch || isMatchedFromPosts;
     });
 
-    // 화면 렌더링 부하 방지를 위해 최대 30개씩 표시
-    return { list: filtered.slice(0, 30), isDefaultRecommend: false };
-  }, [channels, search, selectedTag]);
+    // 구독자 순으로 정렬하여 상위 결과부터 노출
+    const sortedFiltered = [...filtered].sort((a, b) => {
+      const subA = Number(a.follower_count ?? a.follwer_count ?? a.subscriber_count ?? a.subscribers ?? 0);
+      const subB = Number(b.follower_count ?? b.follwer_count ?? b.subscriber_count ?? b.subscribers ?? 0);
+      return subB - subA;
+    });
 
-  // 2단계: 현재 화면에 노출된 채널들의 channel_id만 모아서 포스트를 정확히 조회 (.in 쿼리)
+    return { 
+      list: sortedFiltered.slice(0, 50), // 최대 50개까지 넉넉하게 렌더링
+      totalCount: sortedFiltered.length, 
+      isDefaultRecommend: false 
+    };
+  }, [channels, search, selectedTag, matchedPostChannelIds]);
+
+  // 4. 현재 화면에 노출된 채널들의 최신 영상 4개씩만 개별 병렬 조회 (.in()의 1000개 잘림 현상 완벽 해결)
   useEffect(() => {
     const fetchPostsForDisplayed = async () => {
-      const targetCids = displayedChannels.list
-        .map(c => String(c.channel_id || '').trim())
-        .filter(Boolean);
+      const targetChannels = displayedChannels.list.filter(c => {
+        const key = cleanId(c.channel_id).toLowerCase();
+        return key && !postsMap[key];
+      });
 
-      if (targetCids.length === 0) return;
-
-      // 이미 로드된 채널은 제외하고 아직 안 불러온 채널만 추가 요청
-      const missingCids = targetCids.filter(cid => !postsMap[cid]);
-      if (missingCids.length === 0) return;
+      if (targetChannels.length === 0) return;
 
       setPostsLoading(true);
       try {
-        const { data: pData, error } = await supabase
-          .from('influencer_posts')
-          .select('*')
-          .in('channel_id', missingCids)
-          .order('published_at', { ascending: false })
-          .limit(missingCids.length * 15); // 채널당 충분한 최신 영상을 가져옴
+        const newEntries: Record<string, any[]> = {};
 
-        if (!error && pData) {
-          setPostsMap(prev => {
-            const next = { ...prev };
-            // 초기화 (데이터가 없는 채널도 빈 배열로 마킹하여 재요청 방지)
-            missingCids.forEach(cid => {
-              if (!next[cid]) next[cid] = [];
-            });
+        // 화면에 보이는 채널들에 대해서만 각각 최신 4개씩 핀포인트 병렬 쿼리
+        await Promise.all(
+          targetChannels.map(async (channel) => {
+            const rawCid = String(channel.channel_id || '').trim();
+            const cleanedCid = cleanId(rawCid);
+            const mapKey = cleanedCid.toLowerCase();
+            if (!mapKey) return;
 
-            pData.forEach((p: any) => {
-              const cid = String(p.channel_id || '').trim();
-              if (!cid) return;
-              if (!next[cid]) next[cid] = [];
-              if (next[cid].length < 4) {
-                next[cid].push(p);
-              }
-            });
-            return next;
-          });
-        }
+            // 원본 ID와 @ 제거 ID 모두 대응
+            const candidateIds = Array.from(new Set([rawCid, cleanedCid, `@${cleanedCid}`])).filter(Boolean);
+
+            const { data: pData } = await supabase
+              .from('influencer_posts')
+              .select('*')
+              .in('channel_id', candidateIds)
+              .order('published_at', { ascending: false })
+              .limit(4);
+
+            newEntries[mapKey] = pData && pData.length > 0 ? pData : [];
+          })
+        );
+
+        setPostsMap(prev => ({ ...prev, ...newEntries }));
       } catch (err) {
-        console.error('포스트 로드 에러:', err);
+        console.error('개별 포스트 로드 에러:', err);
       } finally {
         setPostsLoading(false);
       }
@@ -142,7 +224,7 @@ export default function YoutubeDashboardPage() {
   }, [displayedChannels.list]);
 
   const handleOpenDetail = (channel: any) => {
-    const targetId = channel.channel_id || channel.id;
+    const targetId = cleanId(channel.channel_id) || channel.id;
     router.push(`/youtube/${targetId}`);
   };
 
@@ -154,7 +236,7 @@ export default function YoutubeDashboardPage() {
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
             <input 
               type="text" 
-              placeholder="유튜버 이름이나 키워드를 검색하세요..." 
+              placeholder="유튜버 이름, 태그, 또는 영상 제목 키워드(예: 맛, 여행)를 검색하세요..." 
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-12 pr-4 py-3 border border-slate-200 rounded-full text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500 transition shadow-inner"
@@ -195,14 +277,16 @@ export default function YoutubeDashboardPage() {
           <div className="bg-gradient-to-r from-red-50 to-rose-50 border border-red-200 p-4 rounded-2xl flex items-center justify-between text-xs text-red-900 shadow-2xs">
             <div className="flex items-center gap-2 font-bold">
               <Sparkles size={16} className="text-red-600" />
-              <span>실시간 추천 대형 유튜버 파워 채널 베스트 5</span>
+              <span>실시간 추천 대형 유튜버 파워 채널 베스트 5 (총 로드된 채널: {channels.length}개)</span>
             </div>
-            <span className="text-[11px] text-red-600 font-semibold">검색창에서 원하는 크리에이터를 검색해 보세요!</span>
+            <span className="text-[11px] text-red-600 font-semibold">검색창에서 원하는 크리에이터나 키워드를 검색해 보세요!</span>
           </div>
         )}
 
-        <div className="text-xs text-slate-500 font-semibold px-1">
-          <span>검색된 유튜브 크리에이터 ({displayedChannels.list.length}명)</span>
+        <div className="text-xs text-slate-500 font-semibold px-1 flex items-center justify-between">
+          <span>
+            검색된 유튜브 크리에이터 ({displayedChannels.totalCount}명 중 상위 {displayedChannels.list.length}명 표시)
+          </span>
         </div>
 
         {loading ? (
@@ -215,8 +299,9 @@ export default function YoutubeDashboardPage() {
           </div>
         ) : (
           displayedChannels.list.map((channel) => {
-            const cId = String(channel.channel_id || '').trim();
-            const pList = postsMap[cId] || [];
+            const cIdKey = cleanId(channel.channel_id).toLowerCase();
+            const pList = postsMap[cIdKey] || [];
+            const isChannelPostLoaded = cIdKey in postsMap;
 
             const subs = Number(channel.follower_count ?? channel.follwer_count ?? channel.subscriber_count ?? channel.subscribers ?? 0);
             const longFormViews = Number(channel.avg_video_views ?? channel.avg_views ?? 0);
@@ -224,7 +309,7 @@ export default function YoutubeDashboardPage() {
             const estPrice = Number(channel.estimated_video_cpv_price ?? channel.ad_price ?? 0);
 
             const profileImg = channel.profile_img_url || channel.profile_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150';
-            const tagsList = Array.isArray(channel.tags) ? channel.tags : (typeof channel.tags === 'string' ? channel.tags.split(',') : ['크리에이터']);
+            const tagsList = Array.isArray(channel.tags) ? channel.tags : (typeof channel.tags === 'string' && channel.tags.trim() !== '' ? channel.tags.split(',') : ['크리에이터']);
 
             return (
               <div 
@@ -243,15 +328,15 @@ export default function YoutubeDashboardPage() {
                       <div className="flex items-center gap-2">
                         <h3 className="text-base font-bold text-slate-900 truncate">{channel.name || '이름 없음'}</h3>
                         <span className="text-[10px] px-2 py-0.5 bg-red-100 text-red-700 font-extrabold rounded flex-shrink-0">
-                          {channel.platform || 'YOUTUBER'}
+                          {channel.platform || 'YOUTUBE'}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-400 mt-0.5 truncate">@{channel.handle || channel.channel_id}</p>
+                      <p className="text-xs text-slate-400 mt-0.5 truncate">@{cleanId(channel.handle || channel.channel_id)}</p>
                       
                       <div className="flex flex-wrap gap-1.5 mt-2 max-h-20 overflow-y-auto">
                         {tagsList.map((t: string, i: number) => (
                           <span key={i} className="text-[10px] font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-100 whitespace-nowrap">
-                            #{String(t).trim()}
+                            #{String(t).trim().replace(/^#+/, '')}
                           </span>
                         ))}
                       </div>
@@ -313,23 +398,29 @@ export default function YoutubeDashboardPage() {
                         const pViews = Number(p.view_count || p.views || 0);
 
                         return (
-                          <div key={i} className="group relative block rounded-xl border border-slate-100 overflow-hidden bg-slate-100 aspect-video">
+                          <a 
+                            key={i} 
+                            href={p.post_url || (p.video_id ? `https://www.youtube.com/watch?v=${p.video_id}` : '#')}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="group relative block rounded-xl border border-slate-100 overflow-hidden bg-slate-100 aspect-video"
+                          >
                             <img src={thumb} alt="" className="w-full h-full object-cover group-hover:scale-105 transition duration-300" referrerPolicy="no-referrer" />
                             <div className="absolute inset-0 bg-black/80 backdrop-blur-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-center items-center text-center p-3 text-white space-y-1">
                               <p className="text-[11px] font-bold line-clamp-2 px-1">{title}</p>
-                              <span className="text-[10px] text-rose-400 flex items-center gap-1"><Eye size={10} /> {pViews > 0 ? `${pViews.toLocaleString()}회` : '조회수 정보 없음'}</span>
+                              <span className="text-[10px] text-rose-400 flex items-center gap-1"><Eye size={10} /> {pViews > 0 ? `${pViews.toLocaleString()}회` : '조회수 집계중'}</span>
                             </div>
-                          </div>
+                          </a>
                         );
                       })}
                     </div>
-                  ) : postsLoading && !postsMap[cId] ? (
+                  ) : !isChannelPostLoaded && postsLoading ? (
                     <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 text-center text-xs text-slate-400">
                       최신 영상을 불러오는 중...
                     </div>
                   ) : (
                     <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 text-center text-xs text-amber-700 font-semibold">
-                      해당 채널의 최신 영상 데이터가 없습니다. (Channel ID: {channel.channel_id})
+                      DB(`influencer_posts`)에 해당 채널({cleanId(channel.channel_id)})의 영상이 아직 수집되지 않았습니다.
                     </div>
                   )}
                 </div>
