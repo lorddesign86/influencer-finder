@@ -6,7 +6,7 @@ import {
   getFavorites, removeFavoriteItem, updateCustomPrice, updateFavoriteFolder, FavoriteItem 
 } from '@/lib/favorites';
 import { 
-  Bookmark, Folder, Download, Plus, Trash2, Edit3, Check 
+  Bookmark, Folder, Download, Plus, Trash2, Edit3, Check, X 
 } from 'lucide-react';
 
 export default function FavoritesPage() {
@@ -16,6 +16,10 @@ export default function FavoritesPage() {
   const [selectedFolder, setSelectedFolder] = useState<string>('전체보기');
   const [folders, setFolders] = useState<string[]>(['기본 폴더', '관심 캠페인', '섭외 1순위']);
   
+  // 폴더 관리 모달 상태
+  const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [editingPriceId, setEditingPriceId] = useState<string | null>(null);
   const [tempPrice, setTempPrice] = useState<string>('');
@@ -62,7 +66,7 @@ export default function FavoritesPage() {
     setFavorites(Object.values(getFavorites()));
   };
 
-  // 일괄 폴더 이동 처리 함수
+  // 선택한 채널들 일괄 폴더 이동
   const handleBulkMoveFolder = (targetFolder: string) => {
     if (selectedIds.size === 0) return;
     
@@ -72,7 +76,42 @@ export default function FavoritesPage() {
 
     setFavorites(Object.values(getFavorites()));
     setSelectedIds(new Set());
-    alert(`선택한 채널들이 '${targetFolder}'(으)로 이동되었습니다.`);
+    alert(`선택한 ${selectedIds.size}개의 채널이 '${targetFolder}'(으)로 이동되었습니다.`);
+  };
+
+  // 새 폴더 추가
+  const handleAddFolder = () => {
+    const trimmed = newFolderName.trim();
+    if (!trimmed) return;
+    if (folders.includes(trimmed)) {
+      alert('이미 존재하는 폴더 이름입니다.');
+      return;
+    }
+    setFolders([...folders, trimmed]);
+    setNewFolderName('');
+  };
+
+  // 폴더 삭제 (삭제 시 해당 폴더에 있던 채널들은 '기본 폴더'로 자동 이동)
+  const handleDeleteFolder = (folderToDelete: string) => {
+    if (folders.length <= 1) {
+      alert('최소 1개의 폴더는 남아있어야 합니다.');
+      return;
+    }
+    if (confirm(`'${folderToDelete}' 폴더를 삭제하시겠습니까? 해당 폴더에 있던 채널들은 '기본 폴더'로 이동됩니다.`)) {
+      // 해당 폴더의 채널들을 '기본 폴더'로 변경
+      const allFavs = getFavorites();
+      Object.values(allFavs).forEach(item => {
+        if ((item.folder || '기본 폴더') === folderToDelete) {
+          updateFavoriteFolder(item.id, '기본 폴더');
+        }
+      });
+
+      setFolders(folders.filter(f => f !== folderToDelete));
+      if (selectedFolder === folderToDelete) {
+        setSelectedFolder('전체보기');
+      }
+      setFavorites(Object.values(getFavorites()));
+    }
   };
 
   const goToDetail = (item: FavoriteItem) => {
@@ -133,7 +172,7 @@ export default function FavoritesPage() {
             <select
               value={selectedFolder}
               onChange={(e) => setSelectedFolder(e.target.value)}
-              className="w-full md:w-44 px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full md:w-44 px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-red-500 cursor-pointer"
             >
               <option value="전체보기">📁 전체보기 (모든 폴더)</option>
               {folders.map(f => <option key={f} value={f}>{f}</option>)}
@@ -141,10 +180,7 @@ export default function FavoritesPage() {
 
             <button 
               type="button"
-              onClick={() => {
-                const name = prompt('새로운 폴더 이름을 입력하세요:');
-                if (name && !folders.includes(name)) setFolders([...folders, name]);
-              }}
+              onClick={() => setIsFolderModalOpen(true)}
               className="flex items-center gap-1 px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer"
             >
               <Folder size={14} /> 폴더 관리
@@ -338,6 +374,80 @@ export default function FavoritesPage() {
           </div>
         )}
       </div>
+
+      {/* 폴더 관리 모달 (추가 및 삭제 기능 포함) */}
+      {isFolderModalOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                <Folder size={18} className="text-red-500" /> 폴더 관리
+              </h3>
+              <button 
+                type="button"
+                onClick={() => setIsFolderModalOpen(false)}
+                className="p-1 text-slate-400 hover:text-slate-700 rounded-lg"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* 새 폴더 추가 입력창 */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-600 block">새 폴더 추가</label>
+              <div className="flex items-center gap-2">
+                <input 
+                  type="text"
+                  placeholder="폴더 이름 입력..."
+                  value={newFolderName}
+                  onChange={(e) => setNewFolderName(e.target.value)}
+                  className="flex-1 px-3 py-2 text-xs border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddFolder}
+                  className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white font-bold text-xs rounded-xl transition cursor-pointer whitespace-nowrap"
+                >
+                  추가
+                </button>
+              </div>
+            </div>
+
+            {/* 기존 폴더 목록 및 삭제 버튼 */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-600 block">보유 중인 폴더 목록</label>
+              <div className="max-h-48 overflow-y-auto space-y-2 divide-y divide-slate-50">
+                {folders.map(f => (
+                  <div key={f} className="flex items-center justify-between pt-2 first:pt-0">
+                    <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                      <Folder size={14} className="text-slate-400" /> {f}
+                    </span>
+                    {folders.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteFolder(f)}
+                        className="px-2.5 py-1 bg-slate-100 hover:bg-red-50 text-slate-500 hover:text-red-600 text-[11px] font-bold rounded-lg transition cursor-pointer"
+                      >
+                        삭제
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setIsFolderModalOpen(false)}
+                className="px-5 py-2.5 bg-slate-900 text-white text-xs font-bold rounded-xl hover:bg-slate-800 transition cursor-pointer"
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
