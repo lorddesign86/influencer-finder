@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
-  getFavorites, removeFavoriteItem, updateFavoriteFolder, FavoriteItem 
+  getFavorites, removeFavoriteItem, FavoriteItem 
 } from '@/lib/favorites';
 import { 
   Bookmark, Folder, Download, Plus, Trash2, Edit3, Check, X 
@@ -16,28 +16,16 @@ export default function FavoritesPage() {
   const [selectedFolder, setSelectedFolder] = useState<string>('전체보기');
   const [folders, setFolders] = useState<string[]>(['기본 폴더', '관심 캠페인', '섭외 1순위']);
   
-  // 폴더 관리 모달 상태
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
 
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  
-  // 메모장 편집 상태
-  const [editingMemoId, setEditingMemoId] = useState<string | null>(null);
+  const [editingMemoKey, setEditingMemoKey] = useState<string | null>(null);
   const [tempMemo, setTempMemo] = useState<string>('');
 
   const loadFavoritesData = () => {
-    const raw = localStorage.getItem('findlist_favorites');
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw);
-        setFavorites(Object.values(parsed));
-      } catch (e) {
-        setFavorites([]);
-      }
-    } else {
-      setFavorites([]);
-    }
+    const favMap = getFavorites();
+    setFavorites(Object.values(favMap));
   };
 
   useEffect(() => {
@@ -56,73 +44,63 @@ export default function FavoritesPage() {
   });
 
   const totalEstimatedPrice = filteredFavorites.reduce((sum, item) => {
-    return sum + (item.custom_price ?? item.base_price ?? 300000);
+    return sum + (item.base_price ?? 300000);
   }, 0);
 
-  const toggleSelect = (id: string) => {
-    setSelectedIds(prev => {
+  const toggleSelect = (itemKey: string) => {
+    setSelectedKeys(prev => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(itemKey)) next.delete(itemKey);
+      else next.add(itemKey);
       return next;
     });
   };
 
-  // 휴지통 버튼: 즐겨찾기에서 즉시 삭제
-  const handleRemove = (id: string) => {
+  const handleRemove = (itemKey: string) => {
     if (confirm('이 채널을 즐겨찾기에서 삭제하시겠습니까?')) {
-      removeFavoriteItem(id);
+      removeFavoriteItem(itemKey);
       loadFavoritesData();
-      selectedIds.delete(id);
-      setSelectedIds(new Set(selectedIds));
+      selectedKeys.delete(itemKey);
+      setSelectedKeys(new Set(selectedKeys));
     }
   };
 
-  // 메모 저장
-  const handleSaveMemo = (id: string) => {
+  const handleSaveMemo = (itemKey: string) => {
     try {
-      const raw = localStorage.getItem('findlist_favorites');
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed[id]) {
-          parsed[id].custom_memo = tempMemo;
-          localStorage.setItem('findlist_favorites', JSON.stringify(parsed));
-          window.dispatchEvent(new Event('favorites-updated'));
-        }
-      }
-    } catch (e) {
-      console.error(e);
-    }
-    setEditingMemoId(null);
-    loadFavoritesData();
-  };
-
-  // 체크한 항목들 특정 폴더로 일괄 이동
-  const handleBulkMoveFolder = (targetFolder: string) => {
-    if (selectedIds.size === 0) return;
-    
-    try {
-      const raw = localStorage.getItem('findlist_favorites');
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        selectedIds.forEach(id => {
-          if (parsed[id]) {
-            parsed[id].folder = targetFolder;
-          }
-        });
-        localStorage.setItem('findlist_favorites', JSON.stringify(parsed));
+      const favs = getFavorites();
+      if (favs[itemKey]) {
+        favs[itemKey].custom_memo = tempMemo;
+        localStorage.setItem('findlist_favorites', JSON.stringify(favs));
         window.dispatchEvent(new Event('favorites-updated'));
       }
     } catch (e) {
       console.error(e);
     }
-
+    setEditingMemoKey(null);
     loadFavoritesData();
-    setSelectedIds(new Set());
-    alert(`선택한 ${selectedIds.size}개의 채널이 '${targetFolder}'(으)로 이동되었습니다.`);
   };
 
-  // 새 폴더 추가
+  // 선택한 채널들 일괄 폴더 이동 (정확한 키값 매칭 및 즉시 저장)
+  const handleBulkMoveFolder = (targetFolder: string) => {
+    if (selectedKeys.size === 0) return;
+    try {
+      const favs = getFavorites();
+      selectedKeys.forEach(itemKey => {
+        if (favs[itemKey]) {
+          favs[itemKey].folder = targetFolder;
+        }
+      });
+      localStorage.setItem('findlist_favorites', JSON.stringify(favs));
+      window.dispatchEvent(new Event('favorites-updated'));
+    } catch (e) {
+      console.error(e);
+    }
+
+    loadFavoritesData();
+    setSelectedKeys(new Set());
+    alert(`선택한 채널들이 '${targetFolder}'(으)로 이동되었습니다.`);
+  };
+
   const handleAddFolder = () => {
     const trimmed = newFolderName.trim();
     if (!trimmed) return;
@@ -134,7 +112,6 @@ export default function FavoritesPage() {
     setNewFolderName('');
   };
 
-  // 폴더 삭제 (삭제 시 해당 폴더 안의 채널들은 '기본 폴더'로 이동)
   const handleDeleteFolder = (folderToDelete: string) => {
     if (folders.length <= 1) {
       alert('최소 1개의 폴더는 남아있어야 합니다.');
@@ -142,25 +119,20 @@ export default function FavoritesPage() {
     }
     if (confirm(`'${folderToDelete}' 폴더를 삭제하시겠습니까? 해당 폴더에 있던 채널들은 '기본 폴더'로 이동됩니다.`)) {
       try {
-        const raw = localStorage.getItem('findlist_favorites');
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          Object.values(parsed).forEach((item: any) => {
-            if ((item.folder || '기본 폴더') === folderToDelete) {
-              item.folder = '기본 폴더';
-            }
-          });
-          localStorage.setItem('findlist_favorites', JSON.stringify(parsed));
-          window.dispatchEvent(new Event('favorites-updated'));
-        }
+        const favs = getFavorites();
+        Object.keys(favs).forEach(k => {
+          if ((favs[k].folder || '기본 폴더') === folderToDelete) {
+            favs[k].folder = '기본 폴더';
+          }
+        });
+        localStorage.setItem('findlist_favorites', JSON.stringify(favs));
+        window.dispatchEvent(new Event('favorites-updated'));
       } catch (e) {
         console.error(e);
       }
 
       setFolders(folders.filter(f => f !== folderToDelete));
-      if (selectedFolder === folderToDelete) {
-        setSelectedFolder('전체보기');
-      }
+      if (selectedFolder === folderToDelete) setSelectedFolder('전체보기');
       loadFavoritesData();
     }
   };
@@ -237,10 +209,9 @@ export default function FavoritesPage() {
               <Folder size={14} /> 폴더 관리
             </button>
 
-            {/* 채널 선택 시에만 나타나는 일괄 이동 버튼 */}
-            {selectedIds.size > 0 && (
+            {selectedKeys.size > 0 && (
               <div className="flex items-center gap-1.5 bg-red-50 border border-red-200 px-3 py-1.5 rounded-xl flex-wrap">
-                <span className="text-xs font-bold text-red-600">{selectedIds.size}개 선택됨:</span>
+                <span className="text-xs font-bold text-red-600">{selectedKeys.size}개 선택됨:</span>
                 <div className="flex items-center gap-1">
                   {folders.map(f => (
                     <button
@@ -284,23 +255,24 @@ export default function FavoritesPage() {
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
             <div className="overflow-x-auto w-full">
               <div className="min-w-[800px] divide-y divide-slate-100">
-                {filteredFavorites.map((item: any) => {
-                  const isChecked = selectedIds.has(item.id);
+                {filteredFavorites.map((item) => {
+                  const itemKey = `${item.platform}_${item.id}`;
+                  const isChecked = selectedKeys.has(itemKey);
                   const currentMemo = item.custom_memo || '';
                   const isYoutube = item.platform === 'youtube';
 
                   return (
                     <div 
-                      key={item.id}
+                      key={itemKey}
                       className={`flex items-center justify-between px-4 py-3 transition hover:bg-slate-50/80 ${
                         isChecked ? 'bg-red-50/40' : ''
                       }`}
                     >
-                      {/* 1. 왼쪽 고정 영역: 체크박스 + 프로필 & 채널명 */}
+                      {/* 왼쪽 고정 영역 */}
                       <div className="flex items-center gap-3 min-w-[260px] max-w-[260px] flex-shrink-0 bg-white sticky left-0 z-10 pr-2">
                         <button
                           type="button"
-                          onClick={() => toggleSelect(item.id)}
+                          onClick={() => toggleSelect(itemKey)}
                           className={`w-5 h-5 rounded-md flex items-center justify-center border transition cursor-pointer flex-shrink-0 ${
                             isChecked ? 'bg-red-500 border-red-500 text-white' : 'bg-white border-slate-300 hover:border-red-500'
                           }`}
@@ -329,10 +301,8 @@ export default function FavoritesPage() {
                         </div>
                       </div>
 
-                      {/* 2. 오른쪽 스크롤 영역: 플랫폼별 맞춤 지표 및 메모 & 삭제 버튼 */}
+                      {/* 오른쪽 스크롤 영역 */}
                       <div className="flex items-center gap-8 text-xs text-slate-600 flex-1 justify-end pl-4">
-                        
-                        {/* 플랫폼별 지표 */}
                         {isYoutube ? (
                           <>
                             <div className="text-right w-24 flex-shrink-0">
@@ -365,11 +335,11 @@ export default function FavoritesPage() {
                           </>
                         )}
 
-                        {/* 메모장 및 삭제 버튼 */}
+                        {/* 메모 및 삭제 버튼 */}
                         <div className="flex items-center gap-3 flex-shrink-0 border-l border-slate-100 pl-6">
                           <div className="text-left w-36">
                             <span className="text-[10px] text-slate-400 block mb-0.5">채널 메모</span>
-                            {editingMemoId === item.id ? (
+                            {editingMemoKey === itemKey ? (
                               <div className="flex items-center gap-1">
                                 <input 
                                   type="text"
@@ -380,7 +350,7 @@ export default function FavoritesPage() {
                                 />
                                 <button 
                                   type="button"
-                                  onClick={() => handleSaveMemo(item.id)}
+                                  onClick={() => handleSaveMemo(itemKey)}
                                   className="px-2 py-1 bg-red-500 text-white rounded-lg text-[10px] font-bold"
                                 >
                                   저장
@@ -394,7 +364,7 @@ export default function FavoritesPage() {
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    setEditingMemoId(item.id);
+                                    setEditingMemoKey(itemKey);
                                     setTempMemo(currentMemo);
                                   }}
                                   className="p-1 text-slate-400 hover:text-slate-700 transition cursor-pointer"
@@ -406,10 +376,9 @@ export default function FavoritesPage() {
                             )}
                           </div>
 
-                          {/* 휴지통 삭제 버튼 */}
                           <button
                             type="button"
-                            onClick={() => handleRemove(item.id)}
+                            onClick={() => handleRemove(itemKey)}
                             className="p-2 bg-slate-100 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-xl text-xs transition cursor-pointer"
                             title="즐겨찾기 삭제"
                           >
