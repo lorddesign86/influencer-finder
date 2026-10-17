@@ -6,7 +6,7 @@ import {
   getFavorites, removeFavoriteItem, updateCustomPrice, updateFavoriteFolder, FavoriteItem 
 } from '@/lib/favorites';
 import { 
-  Bookmark, Folder, Download, Plus, Trash2, Edit3, Check, FolderInput 
+  Bookmark, Folder, Download, Plus, Trash2, Edit3, Check 
 } from 'lucide-react';
 
 export default function FavoritesPage() {
@@ -62,7 +62,7 @@ export default function FavoritesPage() {
     setFavorites(Object.values(getFavorites()));
   };
 
-  // 선택한 항목들 일괄 폴더 이동 처리 함수 (정확한 폴더명 반영)
+  // 일괄 폴더 이동 처리 함수
   const handleBulkMoveFolder = (targetFolder: string) => {
     if (selectedIds.size === 0) return;
     
@@ -150,7 +150,7 @@ export default function FavoritesPage() {
               <Folder size={14} /> 폴더 관리
             </button>
 
-            {/* 채널 선택 시에만 나타나는 일괄 이동 버튼들 */}
+            {/* 채널 선택 시에만 나타나는 일괄 이동 버튼 */}
             {selectedIds.size > 0 && (
               <div className="flex items-center gap-1.5 bg-red-50 border border-red-200 px-3 py-1.5 rounded-xl flex-wrap">
                 <span className="text-xs font-bold text-red-600">{selectedIds.size}개 선택됨:</span>
