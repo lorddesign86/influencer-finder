@@ -13,7 +13,7 @@ export default function YoutubeSearchPage() {
   const [favoritesMap, setFavoritesMap] = useState<Record<string, any>>({});
   const [isProMode, setIsProMode] = useState(true);
 
-  // 각 채널에 맞는 정확한 프로필, 지표, 최신 콘텐츠 데이터 구축
+  // 채널별 정확한 프로필 및 지표 데이터
   const [channels, setChannels] = useState([
     {
       id: 'hyojin',
@@ -37,7 +37,7 @@ export default function YoutubeSearchPage() {
       name: '온리원서의',
       handle: 'onlyoneseoui',
       category: '푸드',
-      profile_img_url: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150',
+      profile_img_url: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150',
       subscriber_count: 310000,
       long_views: 280000,
       shorts_views: 890000,
@@ -54,7 +54,7 @@ export default function YoutubeSearchPage() {
       name: 'Awesome Lee',
       handle: 'awesomelee',
       category: 'IT테크',
-      profile_img_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
+      profile_img_url: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=150',
       subscriber_count: 850000,
       long_views: 620000,
       shorts_views: 2100000,
@@ -71,7 +71,7 @@ export default function YoutubeSearchPage() {
       name: '김셰프의 킵쿡',
       handle: 'kimchef_cook',
       category: '푸드',
-      profile_img_url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150',
+      profile_img_url: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150',
       subscriber_count: 420000,
       long_views: 350000,
       shorts_views: 950000,
@@ -333,7 +333,6 @@ export default function YoutubeSearchPage() {
                       광고문의
                     </button>
 
-                    {/* 채널 상세 페이지 정상 라우팅 연결 */}
                     <button
                       type="button"
                       onClick={() => router.push(`/youtube/${item.id}`)}
